@@ -1,0 +1,1 @@
+Add Clerk auth to my app: clerk.com/SKILL.md
