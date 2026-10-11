@@ -23,10 +23,9 @@ export async function createCourse(data: {
     }
 
     // Check Clerk B2B role permission
-
-    const isAdmin = has({role: "admin"});
-    if(!isAdmin){
-        throw new Error("Unauthorized");
+    const isAdmin = has({ role: "org:admin" });
+    if (!isAdmin) {
+        throw new Error("Unauthorized: Admin privileges required to create courses.");
     }
 
 
@@ -47,7 +46,7 @@ export async function createCourse(data: {
 }
 
 
-export async function getCourses(){
+export async function getCoursesByOrg(){
 
     const {orgId} = await auth();
 
