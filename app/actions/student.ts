@@ -2,10 +2,10 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { connectToDatabase } from "@/lib/db";
-import { Enrollment } from "@/models/Enrollment";
-import { Assignment } from "@/models/Assignment";
-import { MockPaper } from "@/models/MockPaper";
-import { Submission } from "@/models/Submission";
+import { Enrollment } from "@/app/models/Enrollment";
+import { Assignment } from "@/app/models/Assignment";
+import { MockPaper } from "@/app/models/MockPaper";
+import { Submission } from "@/app/models/Submission";
 import { revalidatePath } from "next/cache";
 
 // 1. Get Courses Enrolled by Current Student

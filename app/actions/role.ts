@@ -1,16 +1,21 @@
 "use server";
 
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { auth, createClerkClient } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
+
+const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
 export async function setUserRole(role: "teacher" | "student") {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const client = await clerkClient();
-  await client.users.updateUserMetadata(userId, {
+  await clerkClient.users.updateUser(userId, {
     publicMetadata: { role },
   });
 
-  redirect("/dashboard");
+  if (role === "teacher") {
+    redirect("/teacher");
+  } else {
+    redirect("/student");
+  }
 }

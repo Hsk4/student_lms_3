@@ -10,6 +10,9 @@ import {
 } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { Suspense } from "react";
+import Link from "next/link";
+import { DeactivationMessage } from "@/components/auth/deactivation-message";
+import { RoleSelection } from "@/components/auth/role-selection";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -27,30 +30,46 @@ export const metadata: Metadata = {
 };
 
 async function HeaderActions() {
-  const { userId } = await auth();
+  const { userId, orgRole, sessionClaims } = await auth();
+  const role = (sessionClaims?.metadata as { role?: string })?.role || orgRole;
 
   return (
     <>
       <div className="flex items-center gap-4">
-        <h1 className="font-bold text-lg">Student LMS</h1>
+        <Link href="/">
+          <h1 className="font-bold text-lg">Student LMS</h1>
+        </Link>
         {userId && (
           <OrganizationSwitcher
-            afterCreateOrganizationUrl="/dashboard"
-            afterSelectOrganizationUrl="/dashboard"
+            afterCreateOrganizationUrl="/admin"
+            afterSelectOrganizationUrl="/admin"
           />
+        )}
+        {userId && (
+          <nav className="flex gap-4 ml-4">
+            <Link href="/admin" className="text-sm font-medium hover:text-blue-600">Admin</Link>
+            <Link href="/teacher" className="text-sm font-medium hover:text-blue-600">Teacher</Link>
+            <Link href="/student" className="text-sm font-medium hover:text-blue-600">Student</Link>
+          </nav>
         )}
       </div>
       <div>
         {!userId ? (
           <div className="flex gap-2">
             <SignInButton mode="modal">
-              <button className="px-4 py-2 bg-blue-600 text-white rounded">
+              <button className="px-4 py-2 bg-blue-600 text-white rounded text-sm font-medium">
                 Sign In
               </button>
             </SignInButton>
-            <SignUpButton mode="modal">
-              <button className="px-4 py-2 border rounded">Sign Up</button>
-            </SignUpButton>
+            <div className="relative group">
+              <button className="px-4 py-2 border rounded text-sm font-medium bg-white hover:bg-gray-50 flex items-center gap-2">
+                Sign Up
+              </button>
+              <div className="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+                <Link href="/sign-up/teacher" className="block px-4 py-2 text-sm hover:bg-emerald-50 text-gray-700">Join as Teacher</Link>
+                <Link href="/sign-up/student" className="block px-4 py-2 text-sm hover:bg-blue-50 text-gray-700">Join as Student</Link>
+              </div>
+            </div>
           </div>
         ) : (
           <UserButton />
@@ -76,7 +95,9 @@ export default function RootLayout({
               fallback={
                 <>
                   <div className="flex items-center gap-4">
-                    <h1 className="font-bold text-lg">Student LMS</h1>
+                    <Link href="/">
+                      <h1 className="font-bold text-lg">Student LMS</h1>
+                    </Link>
                   </div>
                   <div className="h-10 w-20 bg-gray-100 animate-pulse rounded" />
                 </>
@@ -85,6 +106,13 @@ export default function RootLayout({
               <HeaderActions />
             </Suspense>
           </header>
+          {/* Deactivation & Role Selection Messages */}
+          <Suspense fallback={null}>
+            <DeactivationMessage />
+          </Suspense>
+          <Suspense fallback={null}>
+            <RoleSelection />
+          </Suspense>
           <main className="p-4">{children}</main>
         </ClerkProvider>
       </body>

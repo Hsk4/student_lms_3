@@ -2,10 +2,13 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { connectToDatabase } from "@/lib/db";
-import { Enrollment } from "@/models/Enrollment";
-import { Assignment } from "@/models/Assignment";
-import { MockPaper } from "@/models/MockPaper";
+import { Enrollment } from "@/app/models/Enrollment";
+import { Assignment } from "@/app/models/Assignment";
+import { MockPaper } from "@/app/models/MockPaper";
 import { revalidatePath } from "next/cache";
+import { createClerkClient } from "@clerk/nextjs/server";
+
+const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
 // 1. Assign User (Teacher or Student) to Course
 export async function assignUserToCourse(data: {
@@ -76,4 +79,41 @@ export async function createMockPaper(data: {
 
   revalidatePath("/dashboard/mock-papers");
   return { success: true, mockId: mock._id.toString() };
+}
+
+// 4. Toggle User Activation Status
+export async function toggleUserStatus(targetUserId: string, currentStatus: string) {
+  const { userId, has } = await auth();
+  if (!userId || !has({ role: "org:admin" })) {
+    throw new Error("Forbidden: Admin privileges required.");
+  }
+
+  const newStatus = currentStatus === "deactivated" ? "active" : "deactivated";
+
+  await clerkClient.users.updateUser(targetUserId, {
+    publicMetadata: { status: newStatus },
+  });
+
+  revalidatePath("/admin/users");
+  return { success: true, newStatus };
+}
+
+// 5. Change User Role
+export async function updateUserRole(targetUserId: string, newRole: "teacher" | "student" | "admin") {
+    const { userId, has, orgId } = await auth();
+    if (!userId || !orgId || !has({ role: "org:admin" })) {
+        throw new Error("Forbidden: Admin privileges required.");
+    }
+
+    // Update Clerk Metadata (for UI/Middleware convenience)
+    await clerkClient.users.updateUser(targetUserId, {
+        publicMetadata: { role: newRole },
+    });
+
+    // If it's a B2B role change within the organization, we might need to use memberships API
+    // but for simplicity we are using publicMetadata as a source of truth for app logic
+    // and Clerk B2B roles for the /admin route protection.
+
+    revalidatePath("/admin/users");
+    return { success: true };
 }

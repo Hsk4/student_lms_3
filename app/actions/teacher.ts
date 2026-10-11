@@ -2,7 +2,7 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { connectToDatabase } from "@/lib/db";
-import { Submission } from "@/models/Submission";
+import { Submission } from "@/app/models/Submission";
 import { revalidatePath } from "next/cache";
 
 // Grade and Review a Student Submission
@@ -30,6 +30,10 @@ export async function gradeSubmission(data: {
     },
     { new: true }
   );
+
+  if (!updated) {
+    throw new Error("Submission not found");
+  }
 
   revalidatePath("/dashboard/teacher/submissions");
   return { success: true, submissionId: updated._id.toString() };
