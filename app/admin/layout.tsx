@@ -2,6 +2,7 @@ import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { UserButton } from "@clerk/nextjs";
 import { Search, Bell, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
