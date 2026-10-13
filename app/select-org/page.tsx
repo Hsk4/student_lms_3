@@ -17,6 +17,7 @@ export default function SelectOrgPage() {
 
   useEffect(() => {
     if (isLoaded && user) {
+      // Single organization - just store the first one, no selector needed
       setOrganizations(user.organizationMemberships || []);
     }
   }, [isLoaded, user]);
@@ -40,7 +41,7 @@ export default function SelectOrgPage() {
       {/* Header */}
       <header className={cn("sticky top-0 z-40 backdrop-blur-xl border-b", glassTheme.bg.glass)}>
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
-          <h1 className={cn("font-bold text-lg", glassTheme.text.primary)}>Student LMS</h1>
+          <h1 className={cn(glassTheme.typography.h2, glassTheme.text.primary)}>Student LMS</h1>
           <UserButton />
         </div>
       </header>
@@ -48,48 +49,19 @@ export default function SelectOrgPage() {
       {/* Main Content */}
       <main className="max-w-6xl mx-auto px-6 py-20">
         <div className="space-y-8">
-          {/* Heading */}
-          <div className="text-center space-y-3">
-            <h2 className={cn(glassTheme.typography.h2, glassTheme.text.primary)}>
-              Select Your School
-            </h2>
-            <p className={cn("text-lg", glassTheme.text.secondary)}>
-              Choose an organization to continue
-            </p>
-          </div>
-
-          {/* Organizations Grid */}
+          {/* Organization info - single org display */}
           {organizations.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {organizations.map((membership: any) => (
-                <GlassCard
-                  key={membership.organization.id}
-                  variant="default"
-                  interactive
-                  className="cursor-pointer transition-all hover:shadow-lg"
-                  onClick={() => {
-                    router.push("/");
-                  }}
-                >
-                  <div className="flex items-start gap-4">
-                    <div className={cn(
-                      "p-3 rounded-lg",
-                      "bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 border border-emerald-400/30"
-                    )}>
-                      <Building2 className="w-6 h-6 text-emerald-300" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary)}>
-                        {membership.organization.name}
-                      </h3>
-                      <p className={cn("text-xs mt-1", glassTheme.text.secondary)}>
-                        Role: {membership.role}
-                      </p>
-                    </div>
-                  </div>
-                </GlassCard>
-              ))}
-            </div>
+            <GlassCard variant="premium" className="text-center py-8">
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <Building2 className="w-8 h-8 text-emerald-300" />
+                <span className={cn(glassTheme.typography.h3, glassTheme.text.primary)}>
+                  {organizations[0].organization.name}
+                </span>
+              </div>
+              <p className={cn("text-lg", glassTheme.text.secondary)}>
+                Single Organization • Multi-Role Access
+              </p>
+            </GlassCard>
           ) : (
             <GlassCard variant="premium" className="text-center py-16">
               <p className={glassTheme.text.secondary}>

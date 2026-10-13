@@ -47,8 +47,19 @@ export const WIDGET_ICONS: Record<WidgetId, LucideIcon> = {
   recent: Clock,
 };
 
-/** Tiles that use the dark emerald treatment. */
-export const DARK_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>(["quickActions"]);
+/** Tiles that use the dark teal treatment. */
+export const DARK_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>([
+  "enrollments",
+  "courses",
+  "pending",
+  "mockPapers",
+  "submissions",
+  "quickActions",
+  "people",
+  "boards",
+  "topCourses",
+  "recent",
+]);
 
 /* -------------------------------------------------------------------------- */
 /*  Shared bits                                                                */
@@ -56,15 +67,15 @@ export const DARK_WIDGETS: ReadonlySet<WidgetId> = new Set<WidgetId>(["quickActi
 
 function EmptyHint({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid flex-1 place-items-center rounded-xl border border-dashed py-8 text-center text-sm text-muted-foreground">
+    <div className="grid flex-1 place-items-center rounded-xl border border-dashed py-8 text-center text-sm text-teal-200/60">
       {children}
     </div>
   );
 }
 
 const TONES = {
-  emerald: { text: "text-emerald-600 dark:text-emerald-400", spark: "text-emerald-500" },
-  amber: { text: "text-amber-600 dark:text-amber-400", spark: "text-amber-500" },
+  teal: { text: "text-teal-400", spark: "text-teal-500" },
+  amber: { text: "text-amber-400", spark: "text-amber-500" },
 } as const;
 
 function StatBody({
@@ -72,7 +83,7 @@ function StatBody({
   delta,
   deltaLabel,
   trend,
-  tone = "emerald",
+  tone = "teal",
 }: {
   value: number;
   delta: number;
@@ -83,8 +94,8 @@ function StatBody({
   const t = TONES[tone];
   return (
     <div className="flex flex-1 flex-col">
-      <span className="text-4xl font-semibold tracking-tight tabular-nums">{fmt(value)}</span>
-      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+      <span className="text-4xl font-semibold tracking-tight tabular-nums text-teal-50">{fmt(value)}</span>
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs text-teal-200/60">
         <span className={cn("inline-flex items-center gap-0.5 font-medium", t.text)}>
           {delta > 0 && <ArrowUpRight className="size-3" />}
           {delta > 0 ? `+${fmt(delta)}` : fmt(delta)}
@@ -113,8 +124,8 @@ function SubmissionsBody({ data }: { data: DashboardData }) {
   return (
     <div className="flex flex-1 flex-col gap-5">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Kpi label="Submitted" value={fmt(totalSubmitted)} dot="bg-emerald-500" />
-        <Kpi label="Graded" value={fmt(totalGraded)} dot="bg-sky-500" />
+        <Kpi label="Submitted" value={fmt(totalSubmitted)} dot="bg-teal-500" />
+        <Kpi label="Graded" value={fmt(totalGraded)} dot="bg-cyan-500" />
         <Kpi label="Grading rate" value={`${rate}%`} />
         <Kpi label="Avg / day" value={avg} />
       </div>
@@ -125,14 +136,14 @@ function SubmissionsBody({ data }: { data: DashboardData }) {
           {
             name: "Submitted",
             data: submitted,
-            colorClass: "text-emerald-500",
-            dotClass: "bg-emerald-500",
+            colorClass: "text-teal-500",
+            dotClass: "bg-teal-500",
           },
           {
             name: "Graded",
             data: graded,
-            colorClass: "text-sky-500",
-            dotClass: "bg-sky-500",
+            colorClass: "text-cyan-500",
+            dotClass: "bg-cyan-500",
           },
         ]}
       />
@@ -143,11 +154,11 @@ function SubmissionsBody({ data }: { data: DashboardData }) {
 function Kpi({ label, value, dot }: { label: string; value: string; dot?: string }) {
   return (
     <div>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-xs text-teal-200/60">
         {dot && <span className={cn("size-2 rounded-full", dot)} />}
         {label}
       </p>
-      <p className="mt-0.5 text-xl font-semibold tracking-tight tabular-nums">{value}</p>
+      <p className="mt-0.5 text-xl font-semibold tracking-tight tabular-nums text-teal-100">{value}</p>
     </div>
   );
 }
@@ -169,17 +180,17 @@ function QuickActionsBody() {
         const Icon = a.icon;
         const inner = (
           <>
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-400/10 text-emerald-300 ring-1 ring-emerald-400/20">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-teal-400/20 text-teal-300 ring-1 ring-teal-400/30">
               <Icon className="size-4" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">{a.label}</span>
-              <span className="block truncate text-xs text-emerald-200/60">{a.hint}</span>
+              <span className="block truncate text-sm font-medium text-teal-50">{a.label}</span>
+              <span className="block truncate text-xs text-teal-200/60">{a.hint}</span>
             </span>
             {a.href ? (
-              <ChevronRight className="size-4 text-emerald-200/40 transition-transform group-hover/action:translate-x-0.5 group-hover/action:text-emerald-200" />
+              <ChevronRight className="size-4 text-teal-200/40 transition-transform group-hover/action:translate-x-0.5 group-hover/action:text-teal-200" />
             ) : (
-              <Lock className="size-3.5 text-emerald-200/30" />
+              <Lock className="size-3.5 text-teal-200/30" />
             )}
           </>
         );
@@ -188,7 +199,7 @@ function QuickActionsBody() {
             {a.href ? (
               <Link
                 href={a.href}
-                className="group/action flex items-center gap-3 rounded-xl px-1 py-1.5 transition-colors hover:bg-white/5 focus-visible:ring-2 focus-visible:ring-emerald-400/60 focus-visible:outline-none"
+                className="group/action flex items-center gap-3 rounded-xl px-1 py-1.5 transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-teal-400/60 focus-visible:outline-none"
               >
                 {inner}
               </Link>
@@ -216,27 +227,27 @@ function PeopleBody({ data }: { data: DashboardData }) {
     <div className="flex flex-1 flex-col gap-5">
       <div className="flex items-end justify-between gap-4">
         <div>
-          <p className="text-4xl font-semibold tracking-tight tabular-nums">
+          <p className="text-4xl font-semibold tracking-tight tabular-nums text-teal-50">
             {members === null ? "—" : fmt(members)}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">Organization members</p>
+          <p className="mt-1 text-xs text-teal-200/60">Organization members</p>
         </div>
         {pendingApprovals > 0 && (
-          <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+          <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-400">
             {pendingApprovals} awaiting approval
           </Badge>
         )}
       </div>
 
       <div>
-        <div className="flex h-2 overflow-hidden rounded-full bg-muted">
-          <div className="bg-emerald-500 transition-all" style={{ width: `${studentPct}%` }} />
-          <div className="bg-sky-500 transition-all" style={{ width: `${total > 0 ? 100 - studentPct : 0}%` }} />
+        <div className="flex h-2 overflow-hidden rounded-full bg-teal-900/40">
+          <div className="bg-teal-500 transition-all" style={{ width: `${studentPct}%` }} />
+          <div className="bg-cyan-500 transition-all" style={{ width: `${total > 0 ? 100 - studentPct : 0}%` }} />
         </div>
         <div className="mt-3 grid grid-cols-3 gap-3">
-          <Mini label="Students" value={students} dot="bg-emerald-500" />
-          <Mini label="Teachers" value={teachers} dot="bg-sky-500" />
-          <Mini label="Assignments" value={assignments} dot="bg-muted-foreground/40" />
+          <Mini label="Students" value={students} dot="bg-teal-500" />
+          <Mini label="Teachers" value={teachers} dot="bg-cyan-500" />
+          <Mini label="Assignments" value={assignments} dot="bg-teal-400/40" />
         </div>
       </div>
     </div>
@@ -246,11 +257,11 @@ function PeopleBody({ data }: { data: DashboardData }) {
 function Mini({ label, value, dot }: { label: string; value: number; dot: string }) {
   return (
     <div>
-      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-xs text-teal-200/60">
         <span className={cn("size-2 rounded-full", dot)} />
         {label}
       </p>
-      <p className="text-lg font-semibold tabular-nums">{fmt(value)}</p>
+      <p className="text-lg font-semibold tabular-nums text-teal-100">{fmt(value)}</p>
     </div>
   );
 }
@@ -265,15 +276,15 @@ function BoardsBody({ data }: { data: DashboardData }) {
       {data.boards.map((b) => (
         <li key={b.board} className="space-y-1.5">
           <div className="flex items-baseline justify-between gap-3 text-sm">
-            <span className="truncate font-medium">{b.board}</span>
-            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+            <span className="truncate font-medium text-teal-100">{b.board}</span>
+            <span className="shrink-0 text-xs text-teal-200/60 tabular-nums">
               {fmt(b.students)} students · {b.courses} {b.courses === 1 ? "course" : "courses"}
             </span>
           </div>
           <Progress
             value={(b.students / max) * 100}
             aria-label={`${b.board}: ${b.students} students`}
-            className="gap-0 [&_[data-slot=progress-indicator]]:rounded-full [&_[data-slot=progress-indicator]]:bg-emerald-500 [&_[data-slot=progress-track]]:h-1.5"
+            className="gap-0 [&_[data-slot=progress-indicator]]:rounded-full [&_[data-slot=progress-indicator]]:bg-teal-500 [&_[data-slot=progress-track]]:h-1.5 [&_[data-slot=progress-track]]:bg-teal-900/40"
           />
         </li>
       ))}
@@ -290,25 +301,25 @@ function TopCoursesBody({ data }: { data: DashboardData }) {
       {data.topCourses.map((c, i) => (
         <li
           key={c.id}
-          className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-muted/60"
+          className="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-teal-900/30"
         >
           <span
             className={cn(
               "grid size-7 shrink-0 place-items-center rounded-lg text-xs font-semibold tabular-nums",
               i === 0
-                ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
-                : "bg-muted text-muted-foreground",
+                ? "bg-amber-500/15 text-amber-400"
+                : "bg-teal-900/40 text-teal-300",
             )}
           >
             {i + 1}
           </span>
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-medium">{c.title}</span>
-            <span className="block truncate text-xs text-muted-foreground">{c.board}</span>
+            <span className="block truncate text-sm font-medium text-teal-100">{c.title}</span>
+            <span className="block truncate text-xs text-teal-200/60">{c.board}</span>
           </span>
           <span className="shrink-0 text-right">
-            <span className="block text-sm font-semibold tabular-nums">{fmt(c.students)}</span>
-            <span className="block text-[10px] text-muted-foreground">students</span>
+            <span className="block text-sm font-semibold tabular-nums text-teal-100">{fmt(c.students)}</span>
+            <span className="block text-[10px] text-teal-200/60">students</span>
           </span>
         </li>
       ))}
@@ -317,11 +328,11 @@ function TopCoursesBody({ data }: { data: DashboardData }) {
 }
 
 const ACTIVITY_STYLE: Record<ActivityKind, { icon: LucideIcon; chip: string }> = {
-  submission: { icon: ClipboardCheck, chip: "bg-amber-500/10 text-amber-600 dark:text-amber-400" },
-  enrollment: { icon: UserPlus, chip: "bg-sky-500/10 text-sky-600 dark:text-sky-400" },
-  course: { icon: BookOpen, chip: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" },
-  mock: { icon: FileText, chip: "bg-violet-500/10 text-violet-600 dark:text-violet-400" },
-  assignment: { icon: GraduationCap, chip: "bg-rose-500/10 text-rose-600 dark:text-rose-400" },
+  submission: { icon: ClipboardCheck, chip: "bg-amber-500/10 text-amber-400" },
+  enrollment: { icon: UserPlus, chip: "bg-cyan-500/10 text-cyan-400" },
+  course: { icon: BookOpen, chip: "bg-teal-500/10 text-teal-400" },
+  mock: { icon: FileText, chip: "bg-violet-500/10 text-violet-400" },
+  assignment: { icon: GraduationCap, chip: "bg-rose-500/10 text-rose-400" },
 };
 
 function RecentBody({ data }: { data: DashboardData }) {
@@ -339,10 +350,10 @@ function RecentBody({ data }: { data: DashboardData }) {
               <Icon className="size-4" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-sm font-medium">{a.title}</span>
-              <span className="block truncate text-xs text-muted-foreground">{a.detail}</span>
+              <span className="block truncate text-sm font-medium text-teal-100">{a.title}</span>
+              <span className="block truncate text-xs text-teal-200/60">{a.detail}</span>
             </span>
-            <span className="shrink-0 pt-0.5 text-xs text-muted-foreground">{a.ago}</span>
+            <span className="shrink-0 pt-0.5 text-xs text-teal-200/60">{a.ago}</span>
           </li>
         );
       })}

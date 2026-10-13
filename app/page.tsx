@@ -67,7 +67,7 @@ export default function Home() {
 
               {/* Subheading */}
               <p className={cn("text-lg leading-relaxed max-w-xl", glassTheme.text.secondary)}>
-                A comprehensive, multi-tenant LMS built for educational institutions. Support Sindh, Aga Khan, and O/A Level curricula with advanced analytics and role-based access.
+                A comprehensive LMS built for educational institutions. Support Sindh, Aga Khan, and O/A Level curricula with advanced analytics and role-based access.
               </p>
 
               {/* CTA Buttons */}
@@ -96,7 +96,7 @@ export default function Home() {
               {/* Trust Indicators */}
               <div className="flex flex-wrap gap-6 pt-8">
                 {[
-                  { icon: Users, text: "500+ Schools" },
+                  { icon: Users, text: "One School, Multiple Roles" },
                   { icon: GraduationCap, text: "50K+ Students" },
                   { icon: BarChart3, text: "Real-time Analytics" },
                 ].map((item, i) => (
@@ -200,7 +200,7 @@ export default function Home() {
               {
                 icon: CheckCircle2,
                 title: "Enterprise Ready",
-                desc: "Multi-tenant architecture for multiple schools",
+                desc: "Single organization model with admin-controlled access",
               },
             ].map((feature, i) => (
               <div key={i} className={cn("group p-6 rounded-xl backdrop-blur-xl border transition-all hover:shadow-xl", glassTheme.bg.card)}>

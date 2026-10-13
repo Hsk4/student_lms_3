@@ -15,15 +15,14 @@ const isPublicRoute = createRouteMatcher([
   "/api/webhooks(.*)",
 ]);
 const isOrgSelectRoute = createRouteMatcher(["/select-org(.*)"]);
-const isUnauthorizedRoute = createRouteMatcher(["/unauthorized(.*)"]);
+const isUnauthorizedRoute = createRouteMatcher(["/unauthorized(.*)", "/auth(.*)"]);
 const isApiRoute = createRouteMatcher(["/api(.*)", "/trpc(.*)"]);
 const isAdminArea = createRouteMatcher(["/admin(.*)"]);
 const isTeacherArea = createRouteMatcher(["/teacher(.*)"]);
 const isStudentArea = createRouteMatcher(["/student(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
-  const { userId, orgId, orgRole, redirectToSignIn } = await auth();
-
+  const { userId, orgId, orgRole, redirectToSignIn, sessionClaims } = await auth();
   // 1. Unauthenticated
   if (!userId) {
     if (isPublicRoute(req)) return;
@@ -31,6 +30,11 @@ export default clerkMiddleware(async (auth, req) => {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     return redirectToSignIn({ returnBackUrl: req.url });
+  }
+
+  const status = (sessionClaims?.metadata as { status?: string })?.status;
+  if (status === "deactivated") {
+    return NextResponse.redirect(new URL("/?error=account_deactivated", req.url));
   }
 
   if (isPublicRoute(req) || isUnauthorizedRoute(req)) return;

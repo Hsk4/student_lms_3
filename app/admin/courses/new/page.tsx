@@ -2,144 +2,223 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { GlassPageHeader } from "@/components/glass/glass-page-header";
+import { GlassCard } from "@/components/glass/glass-card";
+import { glassTheme } from "@/lib/theme/glass";
+import { cn } from "@/lib/utils";
+import { BookOpen, Plus, X } from "lucide-react";
 import { createCourse } from "@/app/actions/courses";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Plus, X, Loader2 } from "lucide-react";
-import { BoardType } from "@/app/models/course";
+
+const BOARDS = [
+  "Sindh Board",
+  "Aga Khan Board",
+  "O Levels",
+  "A Levels",
+  "BCOM",
+  "Bachelors",
+];
 
 export default function NewCoursePage() {
-    const router = useRouter();
-    const [loading, setLoading] = useState(false);
-    const [subjects, setSubjects] = useState<string[]>([]);
-    const [subjectInput, setSubjectInput] = useState("");
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  const [formData, setFormData] = useState({
+    board: "",
+    levelOrGrade: "",
+    subjects: [] as string[],
+  });
 
-    const addSubject = () => {
-        if (subjectInput.trim() && !subjects.includes(subjectInput.trim())) {
-            setSubjects([...subjects, subjectInput.trim()]);
-            setSubjectInput("");
-        }
-    };
+  const [subjectInput, setSubjectInput] = useState("");
 
-    const removeSubject = (index: number) => {
-        setSubjects(subjects.filter((_, i) => i !== index));
-    };
+  const handleAddSubject = () => {
+    if (subjectInput.trim() && !formData.subjects.includes(subjectInput.trim())) {
+      setFormData({
+        ...formData,
+        subjects: [...formData.subjects, subjectInput.trim()],
+      });
+      setSubjectInput("");
+    }
+  };
 
-    async function handleSubmit(formData: FormData) {
-        setLoading(true);
-        try {
-            const board = formData.get("board") as BoardType;
-            const levelOrGrade = formData.get("levelOrGrade") as string;
+  const handleRemoveSubject = (index: number) => {
+    setFormData({
+      ...formData,
+      subjects: formData.subjects.filter((_, i) => i !== index),
+    });
+  };
 
-            if (subjects.length === 0) {
-                alert("Please add at least one subject");
-                setLoading(false);
-                return;
-            }
-
-            const result = await createCourse({
-                board,
-                levelOrGrade,
-                subjects,
-            });
-
-            if (result.success) {
-                router.push("/admin/courses");
-            }
-        } catch (error: any) {
-            alert(error.message || "Failed to create course");
-        } finally {
-            setLoading(false);
-        }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!formData.board || !formData.levelOrGrade || formData.subjects.length === 0) {
+      setError("Please fill all fields");
+      return;
     }
 
-    return (
-        <div className="max-w-2xl mx-auto space-y-6">
-            <div>
-                <h1 className="text-2xl font-bold">Create New Course</h1>
-                <p className="text-sm text-muted-foreground">Define a new board, grade level, and subject list.</p>
+    setLoading(true);
+    setError(null);
+
+    const result = await createCourse({
+      board: formData.board,
+      levelOrGrade: formData.levelOrGrade,
+      subjects: formData.subjects,
+    });
+
+    if (result.success) {
+      router.push("/admin/courses");
+    } else {
+      setError(result.error || "Failed to create course");
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      <GlassPageHeader
+        title="Create New Course"
+        subtitle="Add to Curriculum"
+        description="Set up a new course with board, level, and subjects."
+        icon={<BookOpen className="w-6 h-6 text-teal-400" />}
+      />
+
+      <GlassCard variant="default" className="max-w-2xl">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {error && (
+            <div className="bg-red-500/10 border border-red-400/30 rounded-lg p-4 text-red-300">
+              {error}
+            </div>
+          )}
+
+          {/* Board Selection */}
+          <div>
+            <label className={cn("block text-sm font-semibold mb-2", glassTheme.text.primary)}>
+              Educational Board
+            </label>
+            <select
+              value={formData.board}
+              onChange={(e) => setFormData({ ...formData, board: e.target.value })}
+              className={cn(
+                "w-full px-4 py-2 rounded-lg transition-all",
+                "bg-teal-900/20 border border-teal-500/30",
+                "text-white placeholder-white/50",
+                "focus:outline-none focus:ring-2 focus:ring-teal-400/60 focus:border-teal-400/40"
+              )}
+            >
+              <option value="">Select a board</option>
+              {BOARDS.map((board) => (
+                <option key={board} value={board}>
+                  {board}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Level/Grade */}
+          <div>
+            <label className={cn("block text-sm font-semibold mb-2", glassTheme.text.primary)}>
+              Level or Grade
+            </label>
+            <input
+              type="text"
+              placeholder="e.g., Grade 9, 1st Year, A-Level"
+              value={formData.levelOrGrade}
+              onChange={(e) => setFormData({ ...formData, levelOrGrade: e.target.value })}
+              className={cn(
+                "w-full px-4 py-2 rounded-lg transition-all",
+                "bg-teal-900/20 border border-teal-500/30",
+                "text-white placeholder-white/50",
+                "focus:outline-none focus:ring-2 focus:ring-teal-400/60 focus:border-teal-400/40"
+              )}
+            />
+          </div>
+
+          {/* Subjects */}
+          <div>
+            <label className={cn("block text-sm font-semibold mb-2", glassTheme.text.primary)}>
+              Subjects
+            </label>
+            
+            <div className="flex gap-2 mb-4">
+              <input
+                type="text"
+                placeholder="Add a subject"
+                value={subjectInput}
+                onChange={(e) => setSubjectInput(e.target.value)}
+                onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), handleAddSubject())}
+                className={cn(
+                  "flex-1 px-4 py-2 rounded-lg transition-all",
+                  "bg-teal-900/20 border border-teal-500/30",
+                  "text-white placeholder-white/50",
+                  "focus:outline-none focus:ring-2 focus:ring-teal-400/60 focus:border-teal-400/40"
+                )}
+              />
+              <button
+                type="button"
+                onClick={handleAddSubject}
+                className={cn(
+                  "px-4 py-2 rounded-lg font-semibold flex items-center gap-2",
+                  "bg-teal-500/20 border border-teal-400/30",
+                  "text-teal-300 hover:bg-teal-500/30 transition-all"
+                )}
+              >
+                <Plus className="w-4 h-4" />
+                Add
+              </button>
             </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-lg">Course Details</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <form action={handleSubmit} className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="board">Educational Board</Label>
-                            <select
-                                id="board"
-                                name="board"
-                                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                required
-                            >
-                                <option value="Sindh Board">Sindh Board</option>
-                                <option value="Aga Khan Board">Aga Khan Board</option>
-                                <option value="O Levels">O Levels</option>
-                                <option value="A Levels">A Levels</option>
-                                <option value="BCOM">BCOM</option>
-                                <option value="Bachelors">Bachelors</option>
-                            </select>
-                        </div>
+            {formData.subjects.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {formData.subjects.map((subject, index) => (
+                  <div
+                    key={index}
+                    className={cn(
+                      "px-3 py-1 rounded-lg flex items-center gap-2",
+                      "bg-teal-500/20 border border-teal-400/30",
+                      "text-teal-200"
+                    )}
+                  >
+                    {subject}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveSubject(index)}
+                      className="hover:text-teal-100 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-                        <div className="space-y-2">
-                            <Label htmlFor="levelOrGrade">Level or Grade</Label>
-                            <Input
-                                id="levelOrGrade"
-                                name="levelOrGrade"
-                                placeholder="e.g. 1st Year (Only Commerce), 9th, Advance Accounting"
-                                required
-                            />
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label>Subjects</Label>
-                            <div className="flex gap-2">
-                                <Input
-                                    value={subjectInput}
-                                    onChange={(e) => setSubjectInput(e.target.value)}
-                                    placeholder="e.g. Accounting"
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            addSubject();
-                                        }
-                                    }}
-                                />
-                                <Button type="button" onClick={addSubject} variant="secondary">
-                                    <Plus className="w-4 h-4" />
-                                </Button>
-                            </div>
-                            <div className="flex flex-wrap gap-2 pt-2">
-                                {subjects.map((s, i) => (
-                                    <span key={i} className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 text-xs font-medium rounded-md border border-emerald-100">
-                                        {s}
-                                        <button type="button" onClick={() => removeSubject(i)}>
-                                            <X className="w-3 h-3 hover:text-emerald-900" />
-                                        </button>
-                                    </span>
-                                ))}
-                                {subjects.length === 0 && (
-                                    <p className="text-xs text-muted-foreground italic">No subjects added yet.</p>
-                                )}
-                            </div>
-                        </div>
-
-                        <div className="pt-4 flex gap-3">
-                            <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white flex-1" disabled={loading}>
-                                {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
-                                Create Course Offering
-                            </Button>
-                            <Button type="button" variant="outline" onClick={() => router.back()}>
-                                Cancel
-                            </Button>
-                        </div>
-                    </form>
-                </CardContent>
-            </Card>
-        </div>
-    );
+          {/* Actions */}
+          <div className="flex gap-3 pt-6">
+            <button
+              type="submit"
+              disabled={loading}
+              className={cn(
+                "flex-1 px-6 py-2 rounded-lg font-semibold",
+                glassTheme.button.primary,
+                loading && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              {loading ? "Creating..." : "Create Course"}
+            </button>
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className={cn(
+                "px-6 py-2 rounded-lg font-semibold",
+                "bg-white/10 border border-white/20",
+                "text-white hover:bg-white/15 transition-all"
+              )}
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      </GlassCard>
+    </div>
+  );
 }

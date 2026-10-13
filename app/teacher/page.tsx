@@ -5,9 +5,14 @@ import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";
 import { BarChart3, BookOpen, Users, Clock } from "lucide-react";
 import Link from "next/link";
+import { connectToDatabase } from "@/lib/db";
+import { Course } from "@/app/models/course";
+import { Enrollment } from "@/app/models/Enrollment";
+
+export const instant = false;
 
 export default async function TeacherPage() {
-  const { role } = await requirePageRole(["teacher", "admin"], { requireOrg: true });
+  const { role, userId, orgId } = await requirePageRole(["teacher", "admin"], { requireOrg: true });
 
   // If admin, show message they should use /admin
   if (role === "admin") {
@@ -17,9 +22,9 @@ export default async function TeacherPage() {
           title="Teacher Dashboard" 
           subtitle="Restricted Area"
           description="Admin users should access the Admin Panel instead."
-          icon={<BookOpen className="w-6 h-6 text-emerald-300" />}
+          icon={<BookOpen className="w-6 h-6 text-teal-400" />}
         />
-        <GlassCard variant="premium" className="text-center py-16">
+        <div className={cn(glassTheme.bg.tealPremium, "rounded-xl text-center py-16")}>
           <p className={cn("text-lg mb-4", glassTheme.text.primary)}>
             You are an Admin. Access the Admin Panel for full controls.
           </p>
@@ -28,16 +33,50 @@ export default async function TeacherPage() {
               Go to Admin Panel
             </button>
           </Link>
-        </GlassCard>
+        </div>
       </div>
     );
   }
 
+  // Load teacher's courses from MongoDB
+  let courses = [];
+  let studentCount = 0;
+  let pendingReviews = 0;
+  
+  try {
+    await connectToDatabase();
+    
+    // Get all courses this teacher is assigned to
+    const enrollments = await Enrollment.find({
+      userId,
+      orgId,
+      role: "teacher",
+      status: "approved",
+    }).populate("courseId").lean();
+
+    courses = enrollments.map((e: any) => e.courseId).filter(Boolean);
+
+    // Get total students across teacher's courses
+    const courseIds = courses.map((c: any) => c._id);
+    if (courseIds.length > 0) {
+      const studentEnrollments = await Enrollment.countDocuments({
+        courseId: { $in: courseIds },
+        role: "student",
+        status: "approved",
+      });
+      studentCount = studentEnrollments;
+      // TODO: Calculate pending reviews once submissions model is populated
+      pendingReviews = 0;
+    }
+  } catch (error) {
+    console.error("Error loading teacher courses:", error);
+  }
+
   const stats = [
-    { icon: BookOpen, label: "Active Courses", value: "3", color: "emerald" },
-    { icon: Users, label: "Total Students", value: "42", color: "blue" },
-    { icon: Clock, label: "Pending Reviews", value: "8", color: "amber" },
-    { icon: BarChart3, label: "Avg Score", value: "78%", color: "purple" },
+    { icon: BookOpen, label: "Active Courses", value: courses.length.toString(), color: "teal" },
+    { icon: Users, label: "Total Students", value: studentCount.toString(), color: "cyan" },
+    { icon: Clock, label: "Pending Reviews", value: pendingReviews.toString(), color: "amber" },
+    { icon: BarChart3, label: "Avg Score", value: "—", color: "emerald" },
   ];
 
   return (
@@ -46,7 +85,7 @@ export default async function TeacherPage() {
         title="Teacher Dashboard" 
         subtitle="Classroom Management"
         description="Manage your courses, assignments, and student progress."
-        icon={<BookOpen className="w-6 h-6 text-emerald-300" />}
+        icon={<BookOpen className="w-6 h-6 text-teal-400" />}
       />
 
       {/* Quick Stats */}
@@ -56,43 +95,67 @@ export default async function TeacherPage() {
         ))}
       </div>
 
-      {/* Main Content Cards */}
+      {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <GlassCard variant="default" glow className="lg:col-span-2">
-          <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary, "mb-4")}>Recent Assignments</h3>
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className={cn("p-3 rounded-lg border transition-all", "bg-white/5 border-white/10 hover:bg-white/10")}>
-                <p className={glassTheme.text.primary}>Assignment {i}</p>
-                <p className={cn("text-xs mt-1", glassTheme.text.secondary)}>5 submissions pending</p>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
+        <div className={cn(glassTheme.bg.tealCard, "lg:col-span-2 rounded-xl p-6")}>
+          <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary, "mb-4 flex items-center gap-2")}>
+            <BookOpen className="w-5 h-5 text-teal-400" />
+            My Courses
+          </h3>
+          
+          {courses.length === 0 ? (
+            <div className="text-center py-8">
+              <p className={glassTheme.text.secondary}>No courses assigned yet</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {courses.map((course: any) => (
+                <div key={course._id} className={cn("p-4 rounded-lg border transition-all", "bg-teal-900/20 border-teal-500/30 hover:bg-teal-900/30 hover:border-teal-400/40")}>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className={glassTheme.text.primary}>{course.levelOrGrade} - {course.board}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {course.subjects?.map((subject: string) => (
+                      <span key={subject} className="text-xs px-2 py-1 rounded-lg bg-teal-500/20 border border-teal-400/20 text-teal-300">
+                        {subject}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-        <GlassCard variant="default" glow>
-          <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary, "mb-4")}>Quick Actions</h3>
+        <div className={cn(glassTheme.bg.tealCard, "rounded-xl p-6")}>
+          <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary, "mb-4 flex items-center gap-2")}>
+            <BarChart3 className="w-5 h-5 text-teal-400" />
+            Quick Actions
+          </h3>
           <div className="space-y-2">
-            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", glassTheme.bg.glass, glassTheme.hover.glass, glassTheme.text.primary)}>
+            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", "bg-teal-900/30 border border-teal-500/30 hover:bg-teal-900/40 hover:border-teal-400/40 text-teal-300")}>
               Create Assignment
             </button>
-            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", glassTheme.bg.glass, glassTheme.hover.glass, glassTheme.text.primary)}>
+            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", "bg-teal-900/30 border border-teal-500/30 hover:bg-teal-900/40 hover:border-teal-400/40 text-teal-300")}>
               Grade Submissions
             </button>
-            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", glassTheme.bg.glass, glassTheme.hover.glass, glassTheme.text.primary)}>
+            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", "bg-teal-900/30 border border-teal-500/30 hover:bg-teal-900/40 hover:border-teal-400/40 text-teal-300")}>
               View Analytics
             </button>
           </div>
-        </GlassCard>
+        </div>
       </div>
 
       {/* Class Performance */}
-      <GlassCard variant="default">
-        <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary, "mb-4")}>Class Performance</h3>
-        <div className="h-64 flex items-center justify-center rounded-lg bg-white/5 border border-white/10">
+      <div className={cn(glassTheme.bg.tealCard, "rounded-xl p-6")}>
+        <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary, "mb-4 flex items-center gap-2")}>
+          <BarChart3 className="w-5 h-5 text-teal-400" />
+          Class Performance
+        </h3>
+        <div className="h-64 flex items-center justify-center rounded-lg bg-teal-900/10 border border-teal-500/20">
           <p className={glassTheme.text.muted}>Chart placeholder</p>
         </div>
-      </GlassCard>
+      </div>
     </div>
   );
 }
@@ -106,17 +169,17 @@ function StatCard({
   icon: React.ElementType;
   label: string;
   value: string;
-  color: "emerald" | "blue" | "amber" | "purple";
+  color: "teal" | "cyan" | "amber" | "emerald";
 }) {
   const colorMap = {
-    emerald: "bg-emerald-500/20 text-emerald-300 border-emerald-400/30",
-    blue: "bg-blue-500/20 text-blue-300 border-blue-400/30",
+    teal: "bg-teal-500/20 text-teal-300 border-teal-400/30",
+    cyan: "bg-cyan-500/20 text-cyan-300 border-cyan-400/30",
     amber: "bg-amber-500/20 text-amber-300 border-amber-400/30",
-    purple: "bg-purple-500/20 text-purple-300 border-purple-400/30",
+    emerald: "bg-emerald-500/20 text-emerald-300 border-emerald-400/30",
   };
 
   return (
-    <GlassCard variant="default" glow>
+    <div className={cn(glassTheme.bg.tealCard, glassTheme.hover.tealCard, "rounded-xl p-6")}>
       <div className="flex items-start justify-between">
         <div>
           <p className={cn("text-sm", glassTheme.text.secondary)}>{label}</p>
@@ -126,6 +189,6 @@ function StatCard({
           <Icon className="size-5" />
         </div>
       </div>
-    </GlassCard>
+    </div>
   );
 }

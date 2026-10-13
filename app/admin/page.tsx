@@ -15,7 +15,7 @@ export default function AdminDashboardPage() {
         title="Dashboard Overview" 
         subtitle="Analytics & Performance"
         description="Enrollments, curriculum and review activity across your organization."
-        icon={<LayoutDashboard className="w-6 h-6 text-emerald-300" />}
+        icon={<LayoutDashboard className="w-6 h-6 text-teal-400" />}
       />
 
       <Suspense fallback={<DashboardSkeleton />}>
@@ -30,12 +30,12 @@ async function DashboardContent() {
 
   if (!data.hasOrg) {
     return (
-      <div className={cn(glassTheme.bg.card, "rounded-2xl py-20 text-center shadow-xl")}>
+      <div className={cn(glassTheme.bg.tealPremium, "rounded-2xl py-20 text-center shadow-xl")}>
         <div className={cn(
           "mx-auto w-16 h-16 rounded-xl flex items-center justify-center mb-4",
-          "bg-gradient-to-br from-emerald-500/20 to-emerald-600/20 border border-emerald-400/30"
+          "bg-gradient-to-br from-teal-500/20 to-teal-600/20 border border-teal-400/40"
         )}>
-          <Building2 className="w-8 h-8 text-emerald-300" />
+          <Building2 className="w-8 h-8 text-teal-400" />
         </div>
         <h2 className={cn(glassTheme.typography.h3, glassTheme.text.primary, "mb-2")}>
           No organization selected

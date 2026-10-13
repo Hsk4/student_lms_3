@@ -97,7 +97,11 @@ async function dailyCounts(
     {
       $group: {
         _id: {
-          $dateToString: { format: "%Y-%m-%d", date: `$${field}`, timezone: "UTC" },
+          $dateToString: {
+            format: "%Y-%m-%d",
+            date: `$${field}`,
+            timezone: "UTC",
+          },
         },
         n: { $sum: 1 },
       },
@@ -112,7 +116,8 @@ const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 /** Collapse a daily series into weekly buckets (oldest first). */
 function weekly(daily: number[]): number[] {
   const out: number[] = [];
-  for (let i = 0; i < daily.length; i += 7) out.push(sum(daily.slice(i, i + 7)));
+  for (let i = 0; i < daily.length; i += 7)
+    out.push(sum(daily.slice(i, i + 7)));
   return out;
 }
 
@@ -229,7 +234,10 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
       const inAssignments = { assignmentId: { $in: assignmentIds } };
 
       const courseTitle = new Map(
-        courses.map((c) => [c._id.toString(), `${c.levelOrGrade} · ${c.board}`]),
+        courses.map((c) => [
+          c._id.toString(),
+          `${c.levelOrGrade} · ${c.board}`,
+        ]),
       );
       const assignmentTitle = new Map(
         assignments.map((a) => [a._id.toString(), a.title]),
@@ -255,13 +263,34 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
       ] = await Promise.all([
         Enrollment.countDocuments({ ...inCourses, status: "approved" }),
         Enrollment.countDocuments({ ...inCourses, status: "pending" }),
-        Enrollment.distinct("userId", { ...inCourses, status: "approved", role: "student" }),
-        Enrollment.distinct("userId", { ...inCourses, status: "approved", role: "teacher" }),
-        Enrollment.aggregate<{ _id: { courseId: string; role: string }; n: number }>([
+        Enrollment.distinct("userId", {
+          ...inCourses,
+          status: "approved",
+          role: "student",
+        }),
+        Enrollment.distinct("userId", {
+          ...inCourses,
+          status: "approved",
+          role: "teacher",
+        }),
+        Enrollment.aggregate<{
+          _id: { courseId: string; role: string };
+          n: number;
+        }>([
           { $match: { ...inCourses, status: "approved" } },
-          { $group: { _id: { courseId: "$courseId", role: "$role" }, n: { $sum: 1 } } },
+          {
+            $group: {
+              _id: { courseId: "$courseId", role: "$role" },
+              n: { $sum: 1 },
+            },
+          },
         ]),
-        dailyCounts(Enrollment, { ...inCourses, status: "approved" }, "createdAt", keys56),
+        dailyCounts(
+          Enrollment,
+          { ...inCourses, status: "approved" },
+          "createdAt",
+          keys56,
+        ),
         dailyCounts(Course, { orgId }, "createdAt", keys56),
         dailyCounts(MockPaper, { orgId }, "createdAt", keys56),
         MockPaper.countDocuments({ orgId }),
@@ -272,7 +301,12 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
           updatedAt: { $gte: weekAgo },
         }),
         dailyCounts(Submission, inAssignments, "createdAt", keys14),
-        dailyCounts(Submission, { ...inAssignments, status: "graded" }, "updatedAt", keys14),
+        dailyCounts(
+          Submission,
+          { ...inAssignments, status: "graded" },
+          "updatedAt",
+          keys14,
+        ),
         Submission.find(inAssignments).sort({ createdAt: -1 }).limit(5).lean(),
         Enrollment.find(inCourses).sort({ createdAt: -1 }).limit(4).lean(),
         MockPaper.find({ orgId })

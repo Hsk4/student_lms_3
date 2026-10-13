@@ -93,7 +93,7 @@ export function AdminSidebar() {
             {/* Bottom Info Card - Premium Glass */}
             <div className={cn(
                 "p-4 rounded-xl space-y-3",
-                "bg-gradient-to-br from-emerald-500/15 to-emerald-600/10 border border-emerald-400/30",
+                "bg-linear-to-br from-emerald-500/15 to-emerald-600/10 border border-emerald-400/30",
                 "backdrop-blur-md shadow-lg"
             )}>
                 <div className="flex items-center gap-2">

@@ -1,265 +1,367 @@
-# Student LMS - Architecture & Design System
+# Architecture — Fastly LMS (Corrected & Completed)
 
-## Overview
+## 1. Tech Stack
 
-Student LMS is a multi-tenant educational platform built with Next.js 16, Clerk authentication, and a glassmorphism design system. The entire UI follows a consistent glass aesthetic with drag-and-drop dashboard customization across all user roles.
-
----
-
-## Design System: Glassmorphism
-
-### Theme Configuration (`lib/theme/glass.ts`)
-
-All UI elements inherit from a centralized theme configuration:
-
-```typescript
-glassTheme = {
-  bg: {
-    dark,           // Main background gradient
-    glass,          // Standard glass card
-    glassLight,     // Lighter glass variant
-    glassDark,      // Dark emerald glass
-    card,           // Premium card with shadow
-    sidebar,        // Sidebar styling
-  },
-  hover,            // Interactive hover states
-  interactive,      // Focus, active, disabled states
-  shadow,           // Consistent shadow system
-  text: {
-    primary,        // White text
-    secondary,      // White/70
-    muted,          // White/60
-    accent,         // Emerald accent
-  },
-}
-```
-
-### Color Palette
-
-- **Background**: `slate-950/900/emerald-950` gradient
-- **Glass**: `white/10` (light), `emerald-400/20` (accents)
-- **Borders**: `white/20`, `emerald-400/30`
-- **Shadows**: `black/5 → black/20`, `emerald-500/10 → emerald-500/20`
-- **Accents**: Emerald, Blue, Amber, Purple
+| Layer | Technology |
+|-------|------------|
+| Framework | Next.js (App Router, React 19) |
+| Language | TypeScript |
+| Auth | Clerk Organizations (Single organization, multi-role) |
+| Database | MongoDB via Mongoose |
+| Validation | Zod (all server action / API inputs) |
+| Styling | Tailwind CSS + custom glass theme + shadcn/ui |
+| DnD | @dnd-kit/core + sortable |
+| Webhooks | Clerk webhooks verified with `svix` |
 
 ---
 
-## Component Architecture
+## 2. Project Structure
 
-### Reusable Glass Components
-
-#### 1. **GlassCard** (`components/glass/glass-card.tsx`)
-Wrapper for all card content with glassmorphism styling.
-
-```typescript
-<GlassCard variant="default" | "dark" | "light" glow interactive>
-  {children}
-</GlassCard>
+```
+├── app/
+│   ├── page.tsx                      # Landing (signed-out) / redirect (signed-in)
+│   ├── layout.tsx                    # Root layout (ClerkProvider)
+│   ├── sign-in/[[...sign-in]]/       # Sign in
+│   ├── sign-up/
+│   │   ├── [[...sign-up]]/           # Default signup
+│   │   ├── student/                  # Student signup (stores requestedRole hint)
+│   │   └── teacher/                  # Teacher signup (stores requestedRole hint)
+│   ├── auth/
+│   │   ├── pending/                  # Waiting for approval
+│   │   └── complete/                 # Post sign-in router: setActive(org) → role dashboard
+│   ├── select-org/                   # Organization selector (removed - single org only)
+│   ├── unauthorized/                 # 403 page
+│   ├── admin/
+│   │   ├── layout.tsx                # Admin shell (sidebar + header)
+│   │   ├── page.tsx                  # Bento dashboard
+│   │   ├── accounts/                 # Pending access requests (approve / reject)
+│   │   ├── users/                    # Users & faculty management
+│   │   ├── courses/                  # Course management
+│   │   │   ├── new/                  # Create course
+│   │   │   └── [courseId]/           # Edit, assign teachers, manage enrollments
+│   │   ├── analytics/                # Performance metrics
+│   │   └── settings/                 # Org settings
+│   ├── teacher/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx                  # Teacher dashboard
+│   │   ├── courses/[courseId]/       # Assigned course: lessons, assignments
+│   │   └── submissions/              # Review queue + grading
+│   ├── student/
+│   │   ├── layout.tsx
+│   │   ├── page.tsx                  # Student dashboard
+│   │   ├── courses/[courseId]/       # Lessons, progress
+│   │   ├── assignments/[id]/         # View + submit
+│   │   └── grades/                   # Own grades & feedback
+│   └── api/
+│       └── webhooks/clerk/route.ts   # user / org / membership sync (public, signature-verified)
+├── lib/
+│   ├── actions/                      # Server Actions (moved out of /app)
+│   │   ├── admin.ts
+│   │   ├── courses.ts
+│   │   ├── enrollments.ts
+│   │   ├── assignments.ts
+│   │   ├── student.ts
+│   │   ├── teacher.ts
+│   │   └── access-requests.ts        # Approve / reject (replaces role.ts)
+│   ├── models/                       # Mongoose models (moved out of /app)
+│   │   ├── Course.ts
+│   │   ├── Lesson.ts
+│   │   ├── Assignment.ts
+│   │   ├── Enrollment.ts
+│   │   ├── Submission.ts
+│   │   ├── AccessRequest.ts
+│   │   ├── UserProfile.ts
+│   │   └── DashboardLayout.ts
+│   ├── auth/
+│   │   ├── guards.ts                 # Server-side guards
+│   │   ├── roles.ts                  # Role types, permission map, helpers
+│   │   └── redirects.ts              # roleHome(role) → path
+│   ├── validators/                   # Zod schemas
+│   ├── theme/glass.ts                # Design tokens
+│   ├── admin-dashboard.ts            # Dashboard data aggregation
+│   ├── db.ts                         # Cached MongoDB connection
+│   └── utils.ts                      # cn()
+├── components/
+│   ├── admin/ (admin-sidebar.tsx, dashboard/{bento-card,bento-grid,widgets}.tsx)
+│   ├── glass/ (draggable-grid, glass-card, glass-page-header)
+│   ├── auth/role-selection.tsx
+│   └── ui/                           # shadcn primitives
+├── middleware.ts
+└── docs/
 ```
 
-#### 2. **GlassPageHeader** (`components/glass/glass-page-header.tsx`)
-Consistent page title/description card.
+> **Why move `models/` and `actions/` out of `app/`?** `app/` is for routes. Keeping non-route code in `lib/` avoids accidental route conventions and keeps imports consistent. Model filenames are now PascalCase everywhere (`course.ts` → `Course.ts`).
 
-```typescript
-<GlassPageHeader 
-  title="Dashboard Overview" 
-  description="Your metrics here"
-/>
+---
+
+## 3. Roles & Source of Truth
+
+- **Role lives on the Clerk organization membership** (`org:admin`, `org:teacher`, `org:student`), not on user `publicMetadata`. A user can be a teacher in one org and a student in another, so the role must be per-org.
+- Read it server-side with `const { userId, orgId, orgRole } = await auth()`.
+- `unsafeMetadata.requestedRole` / `requestedOrgId` set at sign-up are **hints only** (users can edit them). Never use them for authorization.
+- The first user who creates an organization becomes `org:admin` (bootstrap path).
+
+---
+
+## 4. Auth Flow
+
+### 4.1 Sign Up → Approval → Dashboard
+
+```
+User visits /sign-up/student or /sign-up/teacher (org-aware: ?org=<slug> or invite link)
+  │
+  ├─ Clerk creates account
+  │    └─ unsafeMetadata = { requestedRole, requestedOrgId }   (hint only)
+  │
+  ├─ Webhook user.created → create UserProfile + AccessRequest { status: "pending" }
+  │
+  └─ Redirect → /auth/pending   (user has NO org membership yet)
+       │
+       ├─ Page re-checks every 5s via useOrganizationList().userMemberships.revalidate()
+       │
+       └─ Admin opens /admin/accounts (reads AccessRequest where status = "pending")
+            │
+            ├─ Approve → server action:
+            │     1. requirePermission("member:manage")
+            │     2. Clerk createOrganizationMembership({ role: "org:student" | "org:teacher" })
+            │     3. AccessRequest.status = "approved", reviewedBy, reviewedAt
+            │
+            ├─ Reject → AccessRequest.status = "rejected" (user sees rejection state on /auth/pending)
+            │
+            └─ Pending page detects membership
+                 → /auth/complete → setActive({ organization }) → redirect by role
 ```
 
-#### 3. **DraggableGrid** (`components/glass/draggable-grid.tsx`)
-Generic drag-and-drop grid system with localStorage persistence.
+### 4.2 `/auth/complete` (role router)
 
-**Features:**
-- Automatic layout persistence
-- Multi-tab sync
-- Keyboard support
-- Touch-friendly
-- Custom gap sizes
+```
+signed in?        no  → /sign-in
+has membership?   no  → /auth/pending
+>1 membership and no active org → /select-org
+else → roleHome(orgRole):
+         org:admin   → /admin
+         org:teacher → /teacher
+         org:student → /student
+```
 
-```typescript
-<DraggableGrid
-  items={["widget1", "widget2"]}
-  storageKey="admin-dashboard:order"
-  onReorder={(items) => {}}
->
-  {(id, isOver, isDragging) => <Widget id={id} />}
-</DraggableGrid>
+### 4.3 Middleware Pipeline (coarse checks only)
+
+```
+Request → clerkMiddleware()
+  │
+  ├─ Public: "/", /sign-in(.*), /sign-up(.*), /unauthorized, /api/webhooks(.*)
+  │     └─ "/" — signed-out sees landing; signed-in → /auth/complete
+  │
+  ├─ Everything else:
+  │   ├─ Not signed in → page: redirect to /sign-in   |   API: 401 JSON
+  │   ├─ Signed in, no org membership → allow ONLY /auth/pending and /select-org
+  │   │                                 (everything else → /auth/pending)
+  │   ├─ Has membership, no active org → /select-org
+  │   └─ Pass through (role checks happen in guards, not middleware)
+```
+
+> Middleware is **not** a security boundary on its own. Always re-check in server components and server actions.
+
+### 4.4 Guard Hierarchy (outer → inner, in call order)
+
+```
+requireAuth()                  ← userId exists, else redirect /sign-in
+  └─ requireOrg()              ← orgId exists, else redirect /select-org
+       └─ requireRole(roles)   ← orgRole in roles, else redirect /unauthorized
+            └─ requirePermission(perm) ← permission map check (finer-grained)
+```
+
+Each guard returns `{ userId, orgId, role }` so callers never re-fetch it.
+Pages use `requirePageRole([...])` (redirects); actions/APIs use `requireRole([...])` (throws / returns `{ success: false }`).
+
+### 4.5 Permission Matrix
+
+| Permission | Admin | Teacher | Student |
+|---|:-:|:-:|:-:|
+| `member:manage` (approve, remove, change role) | ✓ | ✗ | ✗ |
+| `org:settings` | ✓ | ✗ | ✗ |
+| `analytics:view` | ✓ | own courses | ✗ |
+| `course:create` | ✓ | ✗ | ✗ |
+| `course:update` | ✓ | assigned only | ✗ |
+| `course:assign` (assign teachers) | ✓ | ✗ | ✗ |
+| `course:view` | ✓ | assigned | enrolled |
+| `enrollment:manage` | ✓ | ✗ | ✗ |
+| `assignment:manage` | ✓ | assigned courses | ✗ |
+| `submission:create` | ✗ | ✗ | ✓ (enrolled) |
+| `submission:view_own` | ✗ | ✗ | ✓ |
+| `submission:review` | ✓ | assigned courses | ✗ |
+| `grade:view_own` | ✗ | ✗ | ✓ |
+
+"Assigned" / "enrolled" are **resource-level** checks done in the action after the permission check (e.g. `course.teacherIds.includes(userId)`).
+
+---
+
+## 5. Data Model (MongoDB)
+
+Every document has `orgId` (string, indexed). Every unique index is **compound with `orgId`**.
+
+| Model | Key fields | Indexes |
+|---|---|---|
+| **UserProfile** | `clerkUserId`, `email`, `name`, `avatarUrl` | `{ clerkUserId }` unique |
+| **AccessRequest** | `orgId`, `clerkUserId`, `requestedRole`, `status` (pending/approved/rejected), `reviewedBy`, `reviewedAt` | `{ orgId, status }`, `{ orgId, clerkUserId }` unique |
+| **Course** | `orgId`, `title`, `slug`, `description`, `teacherIds[]`, `status` (draft/published/archived), `createdBy` | `{ orgId, slug }` unique |
+| **Lesson** | `orgId`, `courseId`, `title`, `content`, `order` | `{ orgId, courseId, order }` |
+| **Assignment** | `orgId`, `courseId`, `title`, `instructions`, `dueAt`, `maxScore` | `{ orgId, courseId }` |
+| **Enrollment** | `orgId`, `courseId`, `studentId`, `status` (active/completed/dropped), `progress`, `enrolledAt` | `{ orgId, courseId, studentId }` unique |
+| **Submission** | `orgId`, `assignmentId`, `courseId`, `studentId`, `content/fileUrl`, `status` (submitted/graded/returned), `score`, `feedback`, `gradedBy`, `submittedAt`, `gradedAt` | `{ orgId, assignmentId, studentId }` unique, `{ orgId, status }` |
+| **DashboardLayout** | `orgId`, `userId`, `dashboard`, `layout[]` (bento order/sizes) | `{ orgId, userId, dashboard }` unique |
+
+---
+
+## 6. Core Flows
+
+### 6.1 Course Lifecycle
+```
+Admin → /admin/courses/new → createCourse()        [course:create]
+  └─ status = draft
+Admin → assign teacher(s) → assignTeacher()        [course:assign]
+Teacher → adds lessons & assignments               [course:update + assigned]
+Admin/Teacher → publish → status = published
+```
+
+### 6.2 Enrollment
+```
+Admin → /admin/courses/[id] → enrollStudents()     [enrollment:manage]
+  └─ creates Enrollment { status: active } (idempotent via unique index)
+Student → /student sees only courses where an active Enrollment exists
+```
+
+### 6.3 Submission → Review → Grade
+```
+Student → /student/assignments/[id]
+  └─ submitAssignment()   [submission:create]
+       checks: enrolled, not past dueAt (or marked late), no duplicate
+       → Submission { status: submitted }
+Teacher → /teacher/submissions (queue filtered to assigned courses)
+  └─ gradeSubmission()    [submission:review + assigned]
+       → score ≤ maxScore, feedback, status = graded, gradedBy
+Student → /student/grades
+  └─ sees score + feedback (own submissions only)
+```
+
+### 6.4 Analytics
+Admin: org-wide (enrollments, completion rate, avg score, submission volume). Teacher: same, scoped to assigned courses. Computed with Mongo aggregation in `lib/admin-dashboard.ts`, always starting with `$match: { orgId }`.
+
+### 6.5 Webhooks (`/api/webhooks/clerk`)
+Verify the `svix` signature first; reject otherwise. Handle:
+
+| Event | Action |
+|---|---|
+| `user.created` / `user.updated` | upsert `UserProfile`; create `AccessRequest` if new |
+| `user.deleted` | anonymize profile; keep submissions for records |
+| `organizationMembership.created` / `updated` / `deleted` | keep Enrollment/teacher assignments consistent (e.g. deactivate on removal) |
+| `organization.deleted` | schedule org data cleanup |
+
+Handlers must be **idempotent** (Clerk retries).
+
+---
+
+## 7. Data Flow Rules
+
+### Server Components (default)
+- Start with `requirePageRole([...])`.
+- Fetch with Mongoose directly; use `.lean()` and convert `_id`/dates to plain values before passing to client components.
+- Loading states are **not automatic**: add `loading.tsx` or wrap slow sections in `<Suspense>` with a skeleton.
+- Add `error.tsx` per section for error boundaries.
+
+### Server Actions (`"use server"`)
+1. Auth guard (`requireRole` / `requirePermission`)
+2. Validate input with Zod
+3. Resource-level check (ownership / assigned / enrolled)
+4. DB write scoped by `orgId`
+5. `revalidatePath` / `revalidateTag`
+6. Return `{ success: true, data } | { success: false, error, fieldErrors? }`
+
+### Client Components
+- `"use client"`; call actions for mutations, handle pending/error locally (`useTransition`, optimistic updates where helpful).
+- Never trust client-supplied `orgId` or `userId`; the server derives them from the session.
+
+---
+
+## 8. Multi-Tenancy Rules
+
+```ts
+// ✅ orgId from the session, never from the request body
+const { orgId, userId } = await requireRole(["admin", "teacher"]);
+
+// ✅ list
+const courses = await Course.find({ orgId }).lean();
+
+// ✅ by id — ALWAYS include orgId (prevents cross-tenant access by guessing ids)
+const course = await Course.findOne({ _id: courseId, orgId });
+
+// ✅ student-owned data — also scope by owner
+const sub = await Submission.findOne({ _id: id, orgId, studentId: userId });
+
+// ❌ never
+await Course.findById(courseId);
+```
+
+Consider a Mongoose plugin that injects `orgId` into every query and rejects queries without it.
+
+---
+
+## 9. Security Checklist
+
+- Re-verify auth in every page and action (middleware is not enough).
+- Zod-validate all inputs; sanitize any rich-text lesson content before rendering.
+- Webhook signature verification; webhook route excluded from auth middleware only.
+- File uploads (submissions): size/type limits, signed upload URLs, private storage.
+- Rate-limit sensitive actions (submit, sign-up, approve).
+- Never expose `CLERK_SECRET_KEY`, `MONGODB_URI`, or `CLERK_WEBHOOK_SECRET` to the client (only `NEXT_PUBLIC_*`).
+- Audit fields (`createdBy`, `reviewedBy`, `gradedBy`) on privileged writes.
+
+---
+
+## 10. Environment Variables
+
+```
+# Clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+CLERK_WEBHOOK_SECRET=whsec_...
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
+NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/auth/complete
+NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/auth/pending
+
+# Database
+MONGODB_URI=mongodb+srv://...
+
+# App
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
 ---
 
-## Dashboard Layouts
+## 11. Error & Edge Cases
 
-### Admin Dashboard (`/admin`)
-- **Bento grid** with 10+ customizable widgets
-- Drag-to-rearrange with layout persistence
-- Real-time data from MongoDB aggregations
-- Glass cards with colored accents
-
-### Teacher Dashboard (`/teacher`)
-- Quick stats cards (emerald, blue, amber, purple)
-- Course management grid
-- Assignment tracking
-- Performance analytics
-
-### Student Dashboard (`/student`)
-- Progress tracking
-- Course enrollment overview
-- Upcoming assignments
-- Recent activity feed
+| Case | Behavior |
+|---|---|
+| Signed in, no org | `/auth/pending` |
+| Access request rejected | `/auth/pending` shows rejected state + contact admin |
+| Role changed while signed in | Next request reflects the new `orgRole`; guards redirect if no longer allowed |
+| Member removed from org | Webhook deactivates enrollments / unassigns teacher; user returns to `/auth/pending` |
+| Wrong-role route (e.g. student → `/admin`) | `/unauthorized` |
+| Resource from another org | Treated as not found (`notFound()`), not 403, to avoid leaking existence |
+| Duplicate enrollment / submission | Blocked by unique index; action returns friendly error |
+| DB connection in serverless | Cached connection in `lib/db.ts` (`global._mongoose`) |
 
 ---
 
-## Authentication & Authorization
+## 12. Suggested Build Order
 
-### Role-Based Access (`lib/auth/roles.ts`)
-
-| Role    | Routes    | Permissions |
-|---------|-----------|-------------|
-| admin   | `/admin`  | courseManage, memberManage, billingManage |
-| teacher | `/teacher`| courseCreate, courseManage, gradeWrite |
-| student | `/student`| courseView |
-
-### Guards (`lib/auth/guards.ts`)
-
-- `requirePageRole(roles)` - Redirect on auth failure
-- `requirePermission(perm)` - Fresh token checks
-- `requireOrgContext()` - Org-scoped operations
-
----
-
-## Modular Structure
-
-```
-components/glass/
-  ├── glass-card.tsx           # Base card wrapper
-  ├── glass-page-header.tsx    # Page title card
-  ├── draggable-grid.tsx       # Generic drag system
-  └── ...
-
-lib/theme/
-  └── glass.ts                 # Theme configuration
-
-app/
-  ├── layout.tsx               # Root with dark gradient
-  ├── page.tsx                 # Homepage
-  ├── /admin
-  │   ├── layout.tsx           # Admin sidebar + header
-  │   ├── page.tsx             # Bento dashboard
-  │   ├── /accounts            # Role assignment panel
-  │   └── /courses             # Course management
-  ├── /teacher
-  │   └── page.tsx             # Teacher dashboard
-  ├── /student
-  │   └── page.tsx             # Student dashboard
-  └── /auth
-      ├── /sign-up             # Generic signup
-      ├── /complete            # Post-auth redirect
-      └── /pending             # Awaiting role assignment
-```
-
----
-
-## Key Features
-
-### 1. **Glassmorphism Everywhere**
-- Every page uses `backdrop-blur-xl` + `bg-white/10`
-- Consistent border styling: `white/20`
-- Dark gradient backgrounds with radial blur effects
-- Smooth hover transitions
-
-### 2. **Drag-and-Drop Dashboards**
-- Reusable `DraggableGrid` component
-- localStorage persistence (session-safe)
-- Smooth animations (220ms cubic-bezier)
-- Keyboard support (arrow keys)
-- Multi-tab sync via storage events
-
-### 3. **Role-Based UI**
-- Admin: Full dashboard customization
-- Teacher: Class management tools
-- Student: Enrollment & progress tracking
-- Unassigned users: Pending approval page
-
-### 4. **Unified Theming**
-- Single source of truth (`lib/theme/glass.ts`)
-- No color hardcoding in components
-- Consistent spacing & shadows
-- Easy theme swapping
-
----
-
-## Development Best Practices
-
-### 1. **Component Reusability**
-Always use `GlassCard` and `GlassPageHeader` for new pages.
-
-```typescript
-<GlassPageHeader title="New Feature" />
-<GlassCard>
-  {/* content */}
-</GlassCard>
-```
-
-### 2. **Typography Classes**
-Use theme text classes for consistency:
-
-```typescript
-import { glassTheme } from "@/lib/theme/glass";
-<p className={glassTheme.text.secondary}>Muted text</p>
-```
-
-### 3. **Drag-and-Drop**
-For any sortable content, use `DraggableGrid`:
-
-```typescript
-<DraggableGrid items={items} storageKey="unique-key">
-  {(id) => <YourWidget id={id} />}
-</DraggableGrid>
-```
-
-### 4. **Avoid Hardcoding**
-❌ `className="bg-white/10 border border-white/20"`
-✅ `className={glassTheme.bg.glass}`
-
----
-
-## Performance Optimizations
-
-- **Cache Components**: Enabled in Next.js config
-- **Partial Prefetching**: Reduces bundle size
-- **React Compiler**: Automatic memoization
-- **Turbopack**: Fast dev builds (<1s)
-- **Selective Revalidation**: ISR for dashboards
-
----
-
-## Authentication Flow
-
-```
-User Signs Up
-    ↓
-Create Account (No Role)
-    ↓
-Redirects to /auth/pending
-    ↓
-Admin Assigns Role in /admin/accounts
-    ↓
-User Login → Auto-redirect to /{role} dashboard
-```
-
----
-
-## Future Enhancements
-
-- [ ] Dark mode toggle (already glass-ready)
-- [ ] Additional widgets library
-- [ ] Real-time updates via WebSockets
-- [ ] Mobile app (React Native)
-- [ ] Analytics export (PDF/CSV)
-- [ ] Custom theme builder
-
----
-
-**Built with ❤️ for Fastly LMS**
+1. Clerk org setup, middleware, guards, `roles.ts` permission map
+2. Webhook + `UserProfile` + `AccessRequest`
+3. Pending → approve → complete flow
+4. Course CRUD + teacher assignment
+5. Enrollment
+6. Lessons & assignments
+7. Submission → grading → grades page
+8. Analytics + persisted bento layouts
+9. Hardening: validation, rate limits, tests (guards and tenant-isolation tests first)

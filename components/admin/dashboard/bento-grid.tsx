@@ -123,8 +123,8 @@ export function BentoGrid({ data }: { data: DashboardData }) {
 
   return (
     <section aria-label="Dashboard widgets" className="space-y-4">
-      <div className="flex items-center justify-between gap-3 rounded-lg backdrop-blur-md bg-white/10 border border-white/20 p-4 shadow-sm">
-        <p className="flex items-center gap-1.5 text-xs text-foreground/70">
+      <div className="flex items-center justify-between gap-3 rounded-lg backdrop-blur-md bg-teal-950/30 border border-teal-500/30 p-4 shadow-sm">
+        <p className="flex items-center gap-1.5 text-xs text-teal-200/70">
           <GripVertical className="size-3.5" />
           Drag the grip on any card to rearrange your dashboard.
         </p>
@@ -133,7 +133,7 @@ export function BentoGrid({ data }: { data: DashboardData }) {
           size="sm"
           disabled={!isCustom}
           onClick={() => saveOrder(null)}
-          className="text-foreground/60 hover:text-foreground hover:bg-white/20 backdrop-blur-md transition-all"
+          className="text-teal-200/70 hover:text-teal-100 hover:bg-teal-500/20 backdrop-blur-md transition-all border border-teal-500/30"
         >
           <RotateCcw className="size-3.5" />
           Reset layout

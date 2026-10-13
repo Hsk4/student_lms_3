@@ -9,6 +9,10 @@ export const glassTheme = {
     card: "backdrop-blur-xl bg-white/10 border border-white/20 shadow-xl",
     sidebar: "backdrop-blur-xl bg-white/10 border-white/20 shadow-xl",
     premium: "backdrop-blur-xl bg-gradient-to-br from-white/15 to-white/10 border border-white/20 shadow-2xl",
+    // Teal dashboard theme
+    teal: "backdrop-blur-xl bg-gradient-to-br from-teal-950/60 via-slate-900/40 to-slate-950/60 border border-teal-400/20",
+    tealCard: "backdrop-blur-xl bg-gradient-to-br from-teal-900/30 to-slate-900/20 border border-teal-500/30",
+    tealPremium: "backdrop-blur-xl bg-gradient-to-br from-teal-900/40 via-slate-800/30 to-slate-900/40 border border-teal-400/40 shadow-xl shadow-teal-500/10",
   },
   // Hover states
   hover: {
@@ -16,6 +20,8 @@ export const glassTheme = {
     glassDark: "hover:bg-emerald-950/60 hover:border-emerald-400/40 hover:shadow-lg hover:shadow-emerald-500/20",
     card: "hover:shadow-2xl hover:shadow-black/10 hover:bg-white/15",
     interactive: "hover:bg-white/20 hover:shadow-lg hover:scale-105",
+    teal: "hover:bg-teal-900/40 hover:border-teal-400/40 hover:shadow-lg hover:shadow-teal-500/15 transition-all",
+    tealCard: "hover:bg-teal-900/50 hover:border-teal-400/50 hover:shadow-xl hover:shadow-teal-500/20 transition-all",
   },
   // Interactive states
   interactive: {
@@ -37,7 +43,7 @@ export const glassTheme = {
     primary: "text-white",
     secondary: "text-white/70",
     muted: "text-white/60",
-    accent: "text-emerald-300",
+    accent: "text-teal-300",
     accentBright: "text-emerald-400",
   },
   // Typography scales

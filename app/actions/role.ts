@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { addToSchoolOrg, clerk } from "@/lib/auth/guards";
+import { addToSchoolOrg, clerk, SCHOOL_ORG_ID } from "@/lib/auth/guards";
 import { isRole, isSelfAssignableRole, type Role } from "@/lib/auth/roles";
 
 // Teachers can self-register, so by default they wait for admin approval.
@@ -27,9 +27,19 @@ async function assignInitialRole(userId: string, requested: unknown): Promise<Ro
     await addToSchoolOrg(userId, requested);
 
     const status = requested === "teacher" && teachersNeedApproval() ? "pending" : "active";
+    const membershipRole = requested === "teacher" && teachersNeedApproval() ? "org:student" : toClerkOrgRole(requested);
+
     await clerk.users.updateUserMetadata(userId, {
         publicMetadata: { role: requested, status },
     });
+
+    // Ensure membership role matches approval status: pending teachers get student-level access
+    await clerk.organizations.updateOrganizationMembership({
+        organizationId: SCHOOL_ORG_ID!,
+        userId,
+        role: membershipRole,
+    });
+
     return requested;
 }
 

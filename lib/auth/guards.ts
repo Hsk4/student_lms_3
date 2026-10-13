@@ -17,7 +17,7 @@ import {
 } from "@/lib/auth/roles";
 
 export const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-const SCHOOL_ORG_ID = process.env.SCHOOL_ORG_ID;
+export const SCHOOL_ORG_ID = process.env.SCHOOL_ORG_ID;
 
 type HasParams = { role?: ClerkOrgRole; permission?: OrgPermission };
 type HasFn = (params: HasParams) => boolean;
@@ -95,7 +95,6 @@ async function getFreshOrgRole(orgId: string, userId: string): Promise<ClerkOrgR
     });
     return (memberships.data[0]?.role as ClerkOrgRole | undefined) ?? null;
 }
-
 async function resolveContext(opts: GuardOptions = {}): Promise<AuthContext> {
     const { userId, orgId: activeOrgId, orgRole: tokenOrgRole } = await auth();
     if (!userId) throw new AuthError("UNAUTHENTICATED", 401);

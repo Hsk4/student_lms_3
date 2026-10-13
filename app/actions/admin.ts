@@ -122,13 +122,7 @@ async function requireManageableTarget(targetUserId: string) {
 
 // 4. Assign Role to Pending User (from accounts panel)
 export async function assignRoleToUser(targetUserId: string, role: "student" | "teacher") {
-  const ctx = await requirePermission(ORG_PERMISSIONS.memberManage, {
-    fresh: true,
-    requireOrg: true,
-  });
-
-  const membership = await assertUserInOrg(ctx.orgId!, targetUserId);
-  const target = await clerk.users.getUser(targetUserId);
+  const { ctx, target, membership } = await requireManageableTarget(targetUserId);
 
   // Update user's public metadata with the assigned role
   await clerk.users.updateUserMetadata(target.id, {

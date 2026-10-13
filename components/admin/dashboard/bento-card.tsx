@@ -52,27 +52,27 @@ export function BentoShell({
         "h-full gap-4 [--card-spacing:--spacing(5)]",
         "backdrop-blur-xl border transition-all duration-300",
         dark
-          ? // Dark widget: deep emerald glass
-            "bg-emerald-950/40 text-emerald-50 border-emerald-400/20 shadow-xl shadow-emerald-500/10 hover:shadow-2xl hover:shadow-emerald-500/20 hover:border-emerald-400/40 [background-image:radial-gradient(120%_80%_at_100%_0%,oklch(0.55_0.15_165/0.25),transparent_60%)]"
+          ? // Dark widget: deep teal glass
+            "bg-teal-950/40 text-teal-50 border-teal-400/20 shadow-xl shadow-teal-500/10 hover:shadow-2xl hover:shadow-teal-500/20 hover:border-teal-400/40 [background-image:radial-gradient(120%_80%_at_100%_0%,oklch(0.55_0.15_165/0.25),transparent_60%)]"
           : // Light widget: frosted glass
             "bg-white/10 text-foreground border-white/20 shadow-lg shadow-black/5 hover:shadow-xl hover:shadow-black/10 hover:bg-white/15 hover:border-white/30",
-        floating && "cursor-grabbing shadow-2xl ring-2 ring-emerald-400/60 bg-white/20 scale-105",
-        dropTarget && "ring-2 ring-emerald-400/70 shadow-2xl bg-white/20 border-emerald-400/50",
+        floating && "cursor-grabbing shadow-2xl ring-2 ring-teal-400/60 bg-white/20 scale-105",
+        dropTarget && "ring-2 ring-teal-400/70 shadow-2xl bg-white/20 border-teal-400/50",
       )}
     >
       <CardHeader>
         <CardTitle
           className={cn(
             "flex items-center gap-2 text-sm font-medium",
-            dark ? "text-emerald-100" : "text-foreground/90",
+            dark ? "text-teal-100" : "text-foreground/90",
           )}
         >
           <span
             className={cn(
               "grid size-7 place-items-center rounded-lg backdrop-blur-md transition-all",
               dark
-                ? "bg-emerald-400/20 text-emerald-300 border border-emerald-400/30 hover:bg-emerald-400/30"
-                : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-400/20 hover:bg-emerald-500/30 dark:border-emerald-400/40",
+                ? "bg-teal-400/20 text-teal-300 border border-teal-400/30 hover:bg-teal-400/30"
+                : "bg-teal-500/20 text-teal-600 dark:text-teal-400 border border-teal-400/20 hover:bg-teal-500/30 dark:border-teal-400/40",
             )}
           >
             <Icon className="size-4" />
@@ -80,7 +80,7 @@ export function BentoShell({
           {layout.title}
         </CardTitle>
         {layout.description && (
-          <CardDescription className={cn("pl-9 text-xs", dark ? "text-emerald-200/70" : "text-foreground/60")}>
+          <CardDescription className={cn("pl-9 text-xs", dark ? "text-teal-200/70" : "text-foreground/60")}>
             {layout.description}
           </CardDescription>
         )}
@@ -97,7 +97,7 @@ export function BentoShell({
                 "opacity-0 group-hover/bento:opacity-100 focus-visible:opacity-100 active:cursor-grabbing",
                 "[@media(hover:none)]:opacity-100",
                 dark
-                  ? "text-emerald-200/70 hover:bg-emerald-400/20 hover:text-emerald-50 hover:border hover:border-emerald-400/30"
+                  ? "text-teal-200/70 hover:bg-teal-400/20 hover:text-teal-50 hover:border hover:border-teal-400/30"
                   : "text-foreground/60 hover:bg-white/20 hover:text-foreground hover:border hover:border-white/30",
               )}
             >

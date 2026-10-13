@@ -99,7 +99,7 @@ async function UserRow({ membership }: { membership: any }): Promise<any> {
     if (!userId) return null;
 
     const user = await clerkClient.users.getUser(userId);
-    const role = user.publicMetadata?.role || "unassigned";
+    const role = String(user.publicMetadata?.role || "unassigned");
     const status = user.banned ? "deactivated" : "active";
 
     return (

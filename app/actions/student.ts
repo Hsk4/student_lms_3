@@ -32,20 +32,13 @@ export async function submitAssignment(data: {
   await connectToDatabase();
 
   // Students may only submit to assignments of courses they're enrolled in.
-  const assignment = await Assignment.findOne({ _id: data.assignmentId, orgId }).lean() as any;
-  if (!assignment) throw new AuthError("NOT_FOUND", 404);
+  const courseId = Assignment.findOne({ _id: data.assignmentId, orgId }).select("courseId").lean() as any;
+  if (!courseId) throw new AuthError("NOT_FOUND", 404);
+  await requireCourseAccess(courseId, "read");
 
-  const courseId = assignment.courseId?.toString?.() || "";
-  if (courseId) {
-    try {
-      await requireCourseAccess(courseId, "read");
-    } catch (e) {
-      // Course access check failed
-    }
-  }
 
   const submission = await Submission.create({
-    orgId,
+    orgId: orgId!,
     assignmentId: data.assignmentId,
     studentId: userId,
     codeSnippet: data.codeSnippet,
