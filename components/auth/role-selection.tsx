@@ -1,32 +1,31 @@
 "use client";
 
 import { setUserRole } from "@/app/actions/role";
-import { useUser } from "@clerk/nextjs";
+import { useSession, useUser } from "@clerk/nextjs";
 import { GraduationCap, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { homePathForRole } from "@/lib/auth/roles";
 
 export function RoleSelection() {
     const { user, isLoaded } = useUser();
+    const { session, isLoaded: isSessionLoaded } = useSession();
+    const pathname = usePathname();
     const [isSelecting, setIsSelecting] = useState(false);
 
-    // If user is logged in but has no role, show selection
     const role = user?.publicMetadata?.role;
-
-    useEffect(() => {
-        if (isLoaded && user && !role) {
-            const unsafeRole = user.unsafeMetadata?.role as "teacher" | "student" | undefined;
-            if (unsafeRole === "teacher" || unsafeRole === "student") {
-                handleRoleSelect(unsafeRole);
-            }
-        }
-    }, [isLoaded, user, role]);
-
-    if (!isLoaded || !user || role) return null;
+    if (!isLoaded || !isSessionLoaded || !user || !session || role || pathname.startsWith("/auth/complete")) {
+        return null;
+    }
 
     const handleRoleSelect = async (selectedRole: "teacher" | "student") => {
+        if (!session) return;
         setIsSelecting(true);
         try {
             await setUserRole(selectedRole);
+            await user.reload();
+            await session?.getToken({ skipCache: true });
+            window.location.assign(homePathForRole(selectedRole));
         } catch (error) {
             console.error("Failed to set role:", error);
             setIsSelecting(false);

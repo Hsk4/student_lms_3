@@ -1,57 +1,88 @@
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { UserButton } from "@clerk/nextjs";
-import { Search, Bell, Plus } from "lucide-react";
+import { Search, Bell, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { glassTheme } from "@/lib/theme/glass";
+import { cn } from "@/lib/utils";
 
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
+import { requirePagePermission } from "@/lib/auth/guards";
+import { ORG_PERMISSIONS } from "@/lib/auth/roles";
 import { Suspense } from "react";
 
-async function AdminHeaderContent() {
-    const { orgRole } = await auth();
-    if (orgRole !== "org:admin") {
-        redirect("/");
-    }
-    return null;
+async function AdminGate({ children }: { children: React.ReactNode }) {
+    await requirePagePermission(ORG_PERMISSIONS.memberManage, { fresh: true });
+    return <>{children}</>;
 }
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="flex min-h-screen bg-muted/20">
-            <Suspense fallback={null}>
-                <AdminHeaderContent />
-            </Suspense>
+        <div className={cn("flex min-h-screen", glassTheme.bg.dark)}>
+            {/* Background blur effects */}
+            <div className="fixed inset-0 -z-10">
+                <div className="absolute top-0 left-1/4 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl animate-pulse" />
+                <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl animate-pulse" />
+            </div>
+
             <AdminSidebar />
             <div className="flex-1 flex flex-col">
-                {/* Top Bar Header */}
-                <header className="h-16 border-b bg-background px-6 flex items-center justify-between">
-                    <div className="relative w-80">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                {/* Top Bar Header - Premium Glass */}
+                <header className={cn(
+                    "h-20 border-b backdrop-blur-xl px-6 flex items-center justify-between sticky top-0 z-40",
+                    glassTheme.bg.glass
+                )}>
+                    <div className="relative flex-1 max-w-md">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" />
                         <input
                             type="text"
-                            placeholder="Search courses, students, or mock papers..."
-                            className="w-full pl-9 pr-4 py-1.5 text-sm rounded-lg border bg-muted/40 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                            placeholder="Search courses, students, assignments..."
+                            className={cn(
+                                "w-full pl-9 pr-4 py-2.5 text-sm rounded-lg backdrop-blur-md",
+                                "bg-white/10 border border-white/20 text-white placeholder:text-white/50",
+                                "focus:outline-none focus:ring-2 focus:ring-emerald-400/50 focus:border-emerald-400/50 transition-all"
+                            )}
                         />
                     </div>
 
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4 ml-6">
                         <Link href="/admin/courses/new">
-                            <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white gap-2">
-                                <Plus className="w-4 h-4" /> Add Course
+                            <Button size="sm" className={cn(
+                                "rounded-lg font-semibold flex items-center gap-2 transition-all shadow-lg hover:shadow-xl",
+                                glassTheme.button.primary
+                            )}>
+                                <Plus className="w-4 h-4" />
+                                <span className="hidden sm:inline">New Course</span>
                             </Button>
                         </Link>
-                        <div className="p-2 border rounded-full hover:bg-muted cursor-pointer">
-                            <Bell className="w-4 h-4 text-muted-foreground" />
-                        </div>
-                        <Suspense fallback={<div className="w-8 h-8 rounded-full bg-muted animate-pulse" />}>
+
+                        <button className={cn(
+                            "p-2.5 rounded-lg backdrop-blur-md transition-all",
+                            glassTheme.bg.glass,
+                            "hover:bg-white/20 text-white/70 hover:text-white"
+                        )}>
+                            <Bell className="w-5 h-5" />
+                        </button>
+
+                        <button className={cn(
+                            "p-2.5 rounded-lg backdrop-blur-md transition-all flex items-center gap-2",
+                            glassTheme.bg.glass,
+                            "hover:bg-white/20 text-white/70 hover:text-white"
+                        )}>
+                            <Sparkles className="w-5 h-5" />
+                        </button>
+
+                        <Suspense fallback={<div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />}>
                             <UserButton />
                         </Suspense>
                     </div>
                 </header>
 
-                {/* Main Content Body */}
-                <main className="p-6 space-y-6 flex-1">{children}</main>
+                {/* Main Content - Glassmorphic Background */}
+                <main className="p-6 space-y-6 flex-1 overflow-auto">
+                    <Suspense fallback={null}>
+                        <AdminGate>{children}</AdminGate>
+                    </Suspense>
+                </main>
             </div>
         </div>
     );

@@ -24,7 +24,7 @@ async function assignInitialRole(userId: string, requested: unknown): Promise<Ro
 
     if (!isSelfAssignableRole(requested)) return null;
 
-    await addToSchoolOrg(userId);
+    await addToSchoolOrg(userId, requested);
 
     const status = requested === "teacher" && teachersNeedApproval() ? "pending" : "active";
     await clerk.users.updateUserMetadata(userId, {

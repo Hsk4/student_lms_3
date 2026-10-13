@@ -1,22 +1,28 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { homePathForRole, isRole, type Role } from "@/lib/auth/roles";
+import {
+  appRoleFromClerkRole,
+  canRoleAccessPermission,
+  homePathForRole,
+  isClerkOrgRole,
+  ORG_PERMISSIONS,
+} from "@/lib/auth/roles";
 
-const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
-const isRoleSetupRoute = createRouteMatcher(["/auth/complete"]);
-const isPendingRoute = createRouteMatcher(["/pending"]);
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/sign-in(.*)",
+  "/sign-up(.*)",
+  "/api/webhooks(.*)",
+]);
+const isOrgSelectRoute = createRouteMatcher(["/select-org(.*)"]);
+const isUnauthorizedRoute = createRouteMatcher(["/unauthorized(.*)"]);
 const isApiRoute = createRouteMatcher(["/api(.*)", "/trpc(.*)"]);
-
-// Which roles may enter which area. Admin is NOT derived from Clerk
-// organization membership: anyone can create an org and become org:admin.
-const roleRoutes: Array<[ReturnType<typeof createRouteMatcher>, readonly Role[]]> = [
-  [createRouteMatcher(["/admin(.*)"]), ["admin"]],
-  [createRouteMatcher(["/teacher(.*)"]), ["teacher", "admin"]],
-  [createRouteMatcher(["/student(.*)"]), ["student", "admin"]],
-];
+const isAdminArea = createRouteMatcher(["/admin(.*)"]);
+const isTeacherArea = createRouteMatcher(["/teacher(.*)"]);
+const isStudentArea = createRouteMatcher(["/student(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
-  const { userId, sessionClaims, redirectToSignIn } = await auth();
+  const { userId, orgId, orgRole, redirectToSignIn } = await auth();
 
   // 1. Unauthenticated
   if (!userId) {
@@ -27,40 +33,36 @@ export default clerkMiddleware(async (auth, req) => {
     return redirectToSignIn({ returnBackUrl: req.url });
   }
 
-  // 2. Deactivated accounts (also banned in Clerk, see toggleUserStatus)
-  if (sessionClaims?.metadata?.status === "deactivated") {
-    if (req.nextUrl.pathname === "/") return;
+  if (isPublicRoute(req) || isUnauthorizedRoute(req)) return;
+
+  // 2. Every protected route requires an active organization.
+  if (!orgId && !isOrgSelectRoute(req)) {
     if (isApiRoute(req)) {
-      return NextResponse.json({ error: "Account deactivated" }, { status: 403 });
+      return NextResponse.json({ error: "No active organization" }, { status: 403 });
     }
-    return NextResponse.redirect(new URL("/?error=account_deactivated", req.url));
+    return NextResponse.redirect(new URL("/select-org", req.url));
   }
 
-  // 3. Self-registered teachers wait for admin approval
-  if (sessionClaims?.metadata?.status === "pending") {
-    if (isPublicRoute(req) || isRoleSetupRoute(req) || isPendingRoute(req)) return;
+  if (isOrgSelectRoute(req)) return;
+
+  const normalizedOrgRole = isClerkOrgRole(orgRole) ? orgRole : null;
+  const role = appRoleFromClerkRole(normalizedOrgRole);
+  if (!role) {
     if (isApiRoute(req)) {
-      return NextResponse.json({ error: "Awaiting approval" }, { status: 403 });
+      return NextResponse.json({ error: "Organization role not configured" }, { status: 403 });
     }
-    return NextResponse.redirect(new URL("/pending", req.url));
+    return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
 
-  if (isPublicRoute(req) || isRoleSetupRoute(req)) return;
-
-  // 4. Signed in but no role yet -> finish onboarding
-  const role = sessionClaims?.metadata?.role;
-  if (!isRole(role)) {
-    if (isApiRoute(req)) {
-      return NextResponse.json({ error: "Role not assigned" }, { status: 403 });
-    }
-    return NextResponse.redirect(new URL("/auth/complete", req.url));
+  // 3. Coarse permission gates by area. Server actions must still re-check.
+  if (isAdminArea(req) && !canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.memberManage)) {
+    return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
-
-  // 5. Role-based route protection
-  for (const [matches, allowed] of roleRoutes) {
-    if (matches(req) && !allowed.includes(role)) {
-      return NextResponse.redirect(new URL(homePathForRole(role), req.url));
-    }
+  if (isTeacherArea(req) && !canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseManage)) {
+    return NextResponse.redirect(new URL("/unauthorized", req.url));
+  }
+  if (isStudentArea(req) && !canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseView)) {
+    return NextResponse.redirect(new URL(homePathForRole(role), req.url));
   }
 });
 

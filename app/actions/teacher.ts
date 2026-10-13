@@ -1,10 +1,11 @@
 "use server";
 
-import { requireRole } from "@/lib/auth/guards";
+import { AuthError, requireCourseAccess, requirePermission } from "@/lib/auth/guards";
 import { connectToDatabase } from "@/lib/db";
 import { Submission } from "@/app/models/Submission";
 import { Assignment } from "@/app/models/Assignment";
 import { revalidatePath } from "next/cache";
+import { ORG_PERMISSIONS } from "@/lib/auth/roles";
 
 // Grade and Review a Student Submission
 export async function gradeSubmission(data: {
@@ -13,7 +14,7 @@ export async function gradeSubmission(data: {
   feedback: string;
   status: "graded" | "resubmit_required";
 }) {
-  const { userId, orgId, role } = await requireRole(["teacher", "admin"], { requireOrg: true });
+  const { orgId } = await requirePermission(ORG_PERMISSIONS.gradeWrite, { requireOrg: true });
 
   if (!["graded", "resubmit_required"].includes(data.status)) {
     throw new Error("Invalid status");
@@ -21,16 +22,16 @@ export async function gradeSubmission(data: {
 
   await connectToDatabase();
 
-  // Everyone (admins included) may only touch submissions of their own org;
-  // teachers additionally only for assignments they created.
-  const submission = await Submission.findById(data.submissionId).lean();
-  const assignment = submission
-    ? await Assignment.findOne({ _id: submission.assignmentId, orgId }).lean()
-    : null;
-  if (!assignment) throw new Error("Submission not found");
-  if (role === "teacher" && assignment.createdBy !== userId) {
-    throw new Error("Forbidden: you can only grade your own assignments.");
-  }
+  const submission = await Submission.findOne({ _id: data.submissionId, orgId }).lean();
+  if (!submission) throw new AuthError("NOT_FOUND", 404);
+
+  const assignment = await Assignment.findOne({
+    _id: submission.assignmentId,
+    orgId,
+  }).lean();
+  if (!assignment) throw new AuthError("NOT_FOUND", 404);
+
+  await requireCourseAccess(assignment.courseId.toString(), "manage");
 
   const updated = await Submission.findByIdAndUpdate(
     data.submissionId,

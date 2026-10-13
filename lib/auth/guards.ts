@@ -1,89 +1,177 @@
 import { auth, createClerkClient } from "@clerk/nextjs/server";
-import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
 import { redirect } from "next/navigation";
-import { isRole, type Role } from "@/lib/auth/roles";
+
+import { connectToDatabase } from "@/lib/db";
+import { Course } from "@/app/models/course";
+import { Enrollment } from "@/app/models/Enrollment";
+import {
+    appRoleFromClerkRole,
+    canRoleAccessPermission,
+    ORG_PERMISSIONS,
+    roleMatches,
+    type SelfAssignableRole,
+    toClerkOrgRole,
+    type ClerkOrgRole,
+    type OrgPermission,
+    type Role,
+} from "@/lib/auth/roles";
 
 export const clerk = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+const SCHOOL_ORG_ID = process.env.SCHOOL_ORG_ID;
+
+type HasParams = { role?: ClerkOrgRole; permission?: OrgPermission };
+type HasFn = (params: HasParams) => boolean;
 
 export class AuthError extends Error {
     constructor(
         message: string,
-        public status: 401 | 403,
+        public status: 401 | 403 | 404,
     ) {
         super(message);
         this.name = "AuthError";
     }
 }
 
-/**
- * Single-school deployment: every user belongs to this one Clerk organization.
- * Data is scoped by it, so students/teachers don't need an "active org" in
- * their session. Unset => fall back to the session's active org (multi-tenant).
- */
-export function schoolOrgId(): string | null {
-    return process.env.SCHOOL_ORG_ID?.trim() || null;
-}
-
 type GuardOptions = {
-    /**
-     * Re-read role/status from Clerk's backend instead of trusting the session
-     * token (which can be up to ~60s stale). Use for destructive/admin actions
-     * so a demoted or deactivated admin loses access immediately.
-     */
     fresh?: boolean;
-    /** Require an organization (data is scoped per org). */
     requireOrg?: boolean;
 };
 
-export type AuthContext = { userId: string; orgId: string | null; role: Role };
+export type AuthContext = {
+    userId: string;
+    orgId: string | null;
+    role: Role | null;
+    orgRole: ClerkOrgRole | null;
+    has: HasFn;
+};
 
-async function resolve(allowed: readonly Role[], opts: GuardOptions): Promise<AuthContext> {
-    const { userId, orgId: activeOrgId, sessionClaims } = await auth();
-    if (!userId) throw new AuthError("Unauthorized", 401);
-
-    let role: unknown = sessionClaims?.metadata?.role;
-    let status: unknown = sessionClaims?.metadata?.status;
-
-    if (opts.fresh) {
-        const user = await clerk.users.getUser(userId);
-        role = (user.publicMetadata as { role?: unknown }).role;
-        status = (user.publicMetadata as { status?: unknown }).status;
-    }
-
-    if (status === "deactivated") throw new AuthError("Account deactivated", 403);
-    if (status === "pending") throw new AuthError("Account awaiting admin approval", 403);
-    if (!isRole(role) || !allowed.includes(role)) {
-        throw new AuthError("Forbidden: insufficient role", 403);
-    }
-
-    const orgId = schoolOrgId() ?? activeOrgId ?? null;
-    if (opts.requireOrg && !orgId) {
-        throw new AuthError("Forbidden: no organization configured", 403);
-    }
-    // Sensitive (fresh) calls also prove the caller really is in that org.
-    if (opts.fresh && orgId) await assertUserInOrg(orgId, userId);
-
-    return { userId, orgId, role };
+function createHas(orgRole: ClerkOrgRole | null): HasFn {
+    return ({ role, permission }) => {
+        if (!orgRole) return false;
+        if (role) return roleMatches(orgRole, role);
+        if (permission) return canRoleAccessPermission(orgRole, permission);
+        return false;
+    };
 }
 
-/** For server actions / route handlers: throws AuthError when not allowed. */
+export async function addToSchoolOrg(userId: string, role: SelfAssignableRole) {
+    if (!SCHOOL_ORG_ID) {
+        throw new Error("SCHOOL_ORG_ID is not configured");
+    }
+
+    const desiredRole = toClerkOrgRole(role);
+    const memberships = await clerk.organizations.getOrganizationMembershipList({
+        organizationId: SCHOOL_ORG_ID,
+        userId: [userId],
+        limit: 1,
+    });
+    const existingMembership = memberships.data[0];
+
+    if (!existingMembership) {
+        return clerk.organizations.createOrganizationMembership({
+            organizationId: SCHOOL_ORG_ID,
+            userId,
+            role: desiredRole,
+        });
+    }
+
+    if (existingMembership.role !== desiredRole) {
+        return clerk.organizations.updateOrganizationMembership({
+            organizationId: SCHOOL_ORG_ID,
+            userId,
+            role: desiredRole,
+        });
+    }
+
+    return existingMembership;
+}
+
+async function getFreshOrgRole(orgId: string, userId: string): Promise<ClerkOrgRole | null> {
+    'use cache';
+    const memberships = await clerk.organizations.getOrganizationMembershipList({
+        organizationId: orgId,
+        userId: [userId],
+        limit: 1,
+    });
+    return (memberships.data[0]?.role as ClerkOrgRole | undefined) ?? null;
+}
+
+async function resolveContext(opts: GuardOptions = {}): Promise<AuthContext> {
+    const { userId, orgId: activeOrgId, orgRole: tokenOrgRole } = await auth();
+    if (!userId) throw new AuthError("UNAUTHENTICATED", 401);
+
+    const orgId = activeOrgId ?? null;
+    if (opts.requireOrg && !orgId) throw new AuthError("NO_ACTIVE_ORG", 403);
+
+    const orgRole = opts.fresh && orgId
+        ? await getFreshOrgRole(orgId, userId)
+        : ((tokenOrgRole as ClerkOrgRole | null | undefined) ?? null);
+
+    return {
+        userId,
+        orgId,
+        role: appRoleFromClerkRole(orgRole),
+        orgRole,
+        has: createHas(orgRole),
+    };
+}
+
+export async function requireOrgContext(opts: GuardOptions = {}): Promise<AuthContext> {
+    const ctx = await resolveContext({ requireOrg: true, ...opts });
+    if (!ctx.orgId) throw new AuthError("NO_ACTIVE_ORG", 403);
+    return ctx;
+}
+
+export async function requirePermission(
+    permission: OrgPermission,
+    opts: GuardOptions = {},
+): Promise<AuthContext> {
+    const ctx = await requireOrgContext(opts);
+    if (!ctx.has({ permission })) throw new AuthError("FORBIDDEN", 403);
+    return ctx;
+}
+
+/** For existing app code: role checks backed by Clerk organization roles. */
 export async function requireRole(
     allowed: readonly Role[],
     opts: GuardOptions = {},
 ): Promise<AuthContext> {
-    return resolve(allowed, opts);
+    const ctx = await requireOrgContext(opts);
+    if (!ctx.role || !allowed.includes(ctx.role)) {
+        throw new AuthError("FORBIDDEN", 403);
+    }
+    return ctx;
 }
 
-/** For pages / layouts: redirects instead of throwing. */
 export async function requirePageRole(
     allowed: readonly Role[],
     opts: GuardOptions = {},
 ): Promise<AuthContext> {
     try {
-        return await resolve(allowed, opts);
-    } catch (e) {
-        if (e instanceof AuthError) redirect(e.status === 401 ? "/sign-in" : "/");
-        throw e;
+        return await requireRole(allowed, opts);
+    } catch (error) {
+        if (error instanceof AuthError) {
+            if (error.status === 401) redirect("/sign-in");
+            if (error.message === "NO_ACTIVE_ORG") redirect("/select-org");
+            redirect("/unauthorized");
+        }
+        throw error;
+    }
+}
+
+export async function requirePagePermission(
+    permission: OrgPermission,
+    opts: GuardOptions = {},
+): Promise<AuthContext> {
+    try {
+        return await requirePermission(permission, opts);
+    } catch (error) {
+        if (error instanceof AuthError) {
+            if (error.status === 401) redirect("/sign-in");
+            if (error.message === "NO_ACTIVE_ORG") redirect("/select-org");
+            redirect("/unauthorized");
+        }
+        throw error;
     }
 }
 
@@ -95,27 +183,63 @@ export async function assertUserInOrg(orgId: string, targetUserId: string) {
         limit: 1,
     });
     if (memberships.data.length === 0) {
-        throw new AuthError("Forbidden: user is not in your organization", 403);
+        throw new AuthError("FORBIDDEN", 403);
     }
+    return memberships.data[0];
 }
 
-/** Idempotently adds a user to the school org (no-op when SCHOOL_ORG_ID is unset). */
-export async function addToSchoolOrg(userId: string) {
-    const organizationId = schoolOrgId();
-    if (!organizationId) return;
-    try {
-        await clerk.organizations.createOrganizationMembership({
-            organizationId,
-            userId,
-            role: "org:member",
-        });
-    } catch (e) {
-        if (
-            isClerkAPIResponseError(e) &&
-            e.errors.some((x) => x.code === "already_a_member_in_organization")
-        ) {
-            return;
+export async function updateOrganizationMemberRole(
+    orgId: string,
+    targetUserId: string,
+    role: Role,
+) {
+    await assertUserInOrg(orgId, targetUserId);
+    return clerk.organizations.updateOrganizationMembership({
+        organizationId: orgId,
+        userId: targetUserId,
+        role: toClerkOrgRole(role),
+    });
+}
+
+export async function requireCourseAccess(courseId: string, mode: "read" | "manage") {
+    const ctx = await requireOrgContext();
+    await connectToDatabase();
+
+    const course = await Course.findOne({ _id: courseId, orgId: ctx.orgId }).lean();
+    if (!course) throw new AuthError("NOT_FOUND", 404);
+
+    if (ctx.has({ role: "org:admin" })) return { ...ctx, course };
+
+    const teacherAssignment = await Enrollment.exists({
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        courseId: course._id,
+        role: "teacher",
+        status: "approved",
+    });
+
+    if (mode === "manage") {
+        if (!ctx.has({ permission: ORG_PERMISSIONS.courseManage })) {
+            throw new AuthError("FORBIDDEN", 403);
         }
-        throw e;
+        if (course.createdBy !== ctx.userId && !teacherAssignment) {
+            throw new AuthError("FORBIDDEN", 403);
+        }
+        return { ...ctx, course };
     }
+
+    if (course.createdBy === ctx.userId || teacherAssignment) {
+        return { ...ctx, course };
+    }
+
+    const enrolled = await Enrollment.exists({
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+        courseId: course._id,
+        role: "student",
+        status: "approved",
+    });
+
+    if (!enrolled) throw new AuthError("FORBIDDEN", 403);
+    return { ...ctx, course };
 }

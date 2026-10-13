@@ -1,8 +1,8 @@
 import "server-only";
 
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { connection } from "next/server";
-import { redirect } from "next/navigation";
+import { requirePageRole } from "@/lib/auth/guards";
 import type { Model } from "mongoose";
 
 import { connectToDatabase } from "@/lib/db";
@@ -178,8 +178,7 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
   // (required by Cache Components).
   await connection();
 
-  const { userId, orgId, has } = await auth();
-  if (!userId || !has({ role: "org:admin" })) redirect("/");
+  const { orgId } = await requirePageRole(["admin"]);
   if (!orgId) return emptyData({ hasOrg: false });
 
   const now = Date.now();
