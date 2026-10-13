@@ -1,61 +1,65 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { homePathForRole, isRole, type Role } from "@/lib/auth/roles";
 
-const isPublicRoute = createRouteMatcher(["/sign-in(.*)", "/sign-up(.*)", "/"]);
-const isAdminRoute = createRouteMatcher(["/admin(.*)"]);
-const isTeacherRoute = createRouteMatcher(["/teacher(.*)"]);
-const isStudentRoute = createRouteMatcher(["/student(.*)"]);
+const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)"]);
+const isRoleSetupRoute = createRouteMatcher(["/auth/complete"]);
+const isPendingRoute = createRouteMatcher(["/pending"]);
+const isApiRoute = createRouteMatcher(["/api(.*)", "/trpc(.*)"]);
+
+// Which roles may enter which area. Admin is NOT derived from Clerk
+// organization membership: anyone can create an org and become org:admin.
+const roleRoutes: Array<[ReturnType<typeof createRouteMatcher>, readonly Role[]]> = [
+  [createRouteMatcher(["/admin(.*)"]), ["admin"]],
+  [createRouteMatcher(["/teacher(.*)"]), ["teacher", "admin"]],
+  [createRouteMatcher(["/student(.*)"]), ["student", "admin"]],
+];
 
 export default clerkMiddleware(async (auth, req) => {
-  const { userId, orgRole, sessionClaims } = await auth();
+  const { userId, sessionClaims, redirectToSignIn } = await auth();
 
-  // 1. Redirect unauthenticated users to sign-in
-  if (!userId && !isPublicRoute(req)) {
-    return (await auth()).redirectToSignIn();
+  // 1. Unauthenticated
+  if (!userId) {
+    if (isPublicRoute(req)) return;
+    if (isApiRoute(req)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return redirectToSignIn({ returnBackUrl: req.url });
   }
 
-  // 2. Account Deactivation Check
-  const status = (sessionClaims?.publicMetadata as { status?: string })?.status;
-  if (userId && status === "deactivated") {
+  // 2. Deactivated accounts (also banned in Clerk, see toggleUserStatus)
+  if (sessionClaims?.metadata?.status === "deactivated") {
+    if (req.nextUrl.pathname === "/") return;
+    if (isApiRoute(req)) {
+      return NextResponse.json({ error: "Account deactivated" }, { status: 403 });
+    }
     return NextResponse.redirect(new URL("/?error=account_deactivated", req.url));
   }
 
-  // 3. Role Sync (Convert unsafeMetadata to publicMetadata after signup)
-  // Note: This is a simplified way to handle it without webhooks for now
-  if (userId && !sessionClaims?.metadata?.role) {
-    const unsafeRole = (sessionClaims?.unsafeMetadata as { role?: string })?.role;
-    if (unsafeRole === "teacher" || unsafeRole === "student") {
-        // We can't update user from middleware directly, 
-        // the RoleSelection component or a server action called from client will handle it.
-        // But we must allow the user to reach a page where RoleSelection can render.
+  // 3. Self-registered teachers wait for admin approval
+  if (sessionClaims?.metadata?.status === "pending") {
+    if (isPublicRoute(req) || isRoleSetupRoute(req) || isPendingRoute(req)) return;
+    if (isApiRoute(req)) {
+      return NextResponse.json({ error: "Awaiting approval" }, { status: 403 });
     }
+    return NextResponse.redirect(new URL("/pending", req.url));
   }
 
-  // 3. Direct URL protection for /admin (checks Clerk B2B role)
-  if (isAdminRoute(req)) {
-    try {
-      const { orgRole: latestOrgRole } = await auth();
-      if (latestOrgRole !== "org:admin") {
-        return NextResponse.redirect(new URL("/", req.url));
-      }
-    } catch (e) {
-      return (await auth()).redirectToSignIn();
+  if (isPublicRoute(req) || isRoleSetupRoute(req)) return;
+
+  // 4. Signed in but no role yet -> finish onboarding
+  const role = sessionClaims?.metadata?.role;
+  if (!isRole(role)) {
+    if (isApiRoute(req)) {
+      return NextResponse.json({ error: "Role not assigned" }, { status: 403 });
     }
+    return NextResponse.redirect(new URL("/auth/complete", req.url));
   }
 
-  // 4. Teacher Route Protection
-  if (isTeacherRoute(req)) {
-    const role = (sessionClaims?.metadata as { role?: string })?.role || orgRole;
-    if (role !== "org:admin" && role !== "teacher") {
-      return NextResponse.redirect(new URL("/", req.url));
-    }
-  }
-
-  // 5. Student Route Protection
-  if (isStudentRoute(req)) {
-    const role = (sessionClaims?.metadata as { role?: string })?.role || orgRole;
-    if (role !== "org:admin" && role !== "student" && role !== "teacher") {
-      return NextResponse.redirect(new URL("/", req.url));
+  // 5. Role-based route protection
+  for (const [matches, allowed] of roleRoutes) {
+    if (matches(req) && !allowed.includes(role)) {
+      return NextResponse.redirect(new URL(homePathForRole(role), req.url));
     }
   }
 });

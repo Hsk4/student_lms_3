@@ -1,6 +1,6 @@
 "use server";
 
-import { auth } from "@clerk/nextjs/server";
+import { requireRole } from "@/lib/auth/guards";
 import { connectToDatabase } from "@/lib/db";
 import { Enrollment } from "@/app/models/Enrollment";
 import { Assignment } from "@/app/models/Assignment";
@@ -10,8 +10,7 @@ import { revalidatePath } from "next/cache";
 
 // 1. Get Courses Enrolled by Current Student
 export async function getStudentEnrolledCourses() {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  const { userId } = await requireRole(["student"]);
 
   await connectToDatabase();
   const enrollments = await Enrollment.find({ userId, status: "approved" })
@@ -27,10 +26,17 @@ export async function submitAssignment(data: {
   codeSnippet: string;
   notes?: string;
 }) {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
+  const { userId, orgId } = await requireRole(["student"], { requireOrg: true });
 
   await connectToDatabase();
+
+  // Students may only submit to assignments of courses they're enrolled in.
+  const assignment = await Assignment.findOne({ _id: data.assignmentId, orgId }).lean();
+  const enrolled = assignment
+    ? await Enrollment.exists({ userId, courseId: assignment.courseId, status: "approved" })
+    : null;
+  if (!enrolled) throw new Error("Forbidden: you are not enrolled in this course.");
+
   const submission = await Submission.create({
     assignmentId: data.assignmentId,
     studentId: userId,
@@ -43,9 +49,10 @@ export async function submitAssignment(data: {
   return { success: true, submissionId: submission._id.toString() };
 }
 
-// 3. Fetch Mock Papers for Board / Level
+// 3. Fetch Mock Papers for Board / Level (scoped to the caller's org)
 export async function getMockPapers(board: string, levelOrGrade: string) {
+  const { orgId } = await requireRole(["student", "teacher", "admin"], { requireOrg: true });
   await connectToDatabase();
-  const mocks = await MockPaper.find({ board, levelOrGrade }).sort({ year: -1 }).lean();
+  const mocks = await MockPaper.find({ orgId, board, levelOrGrade }).sort({ year: -1 }).lean();
   return JSON.parse(JSON.stringify(mocks));
 }

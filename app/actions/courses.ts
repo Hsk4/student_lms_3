@@ -1,6 +1,6 @@
 "use server"
 
-import {auth } from "@clerk/nextjs/server"
+import { requireRole } from "@/lib/auth/guards"
 
 import {connectToDatabase} from "@/lib/db"
 
@@ -16,17 +16,7 @@ export async function createCourse(data: {
     subjects: string[];
 })
 {
-    const {userId , orgId, has } = await auth();
-
-    if(!userId || !orgId){
-        throw new Error("Unauthorized");
-    }
-
-    // Check Clerk B2B role permission
-    const isAdmin = has({ role: "org:admin" });
-    if (!isAdmin) {
-        throw new Error("Unauthorized: Admin privileges required to create courses.");
-    }
+    const { userId, orgId } = await requireRole(["admin"], { fresh: true, requireOrg: true });
 
 
     await connectToDatabase();
@@ -37,7 +27,7 @@ export async function createCourse(data: {
         levelOrGrade : data.levelOrGrade,
         subjects : data.subjects,
         createdBy : userId,
-        orgId : orgId
+        orgId : orgId!
     });
 
 
@@ -48,14 +38,15 @@ export async function createCourse(data: {
 
 export async function getCoursesByOrg(){
 
-    const {orgId} = await auth();
+    // Any signed-in, active user with a role may list their org's courses.
+    const ctx = await requireRole(["admin", "teacher", "student"], { requireOrg: true }).catch(() => null);
 
-    if(!orgId){
+    if(!ctx){
         return [];
     }
 
     await connectToDatabase();
-    const courses = await Course.find({ orgId }).sort({ createdAt: -1 }).lean();
+    const courses = await Course.find({ orgId: ctx.orgId }).sort({ createdAt: -1 }).lean();
 
     return JSON.parse(JSON.stringify(courses));
 };
@@ -63,11 +54,7 @@ export async function getCoursesByOrg(){
 
 // Delete a Course offering (Admin Only)
 export async function deleteCourse(courseId: string) {
-    const { userId, orgId, has } = await auth();
-
-    if (!userId || !orgId || !has({ role: "org:admin" })) {
-        throw new Error("Forbidden: Admin privileges required to delete courses.");
-    }
+    const { orgId } = await requireRole(["admin"], { fresh: true, requireOrg: true });
 
     await connectToDatabase();
     await Course.deleteOne({ _id: courseId, orgId });
