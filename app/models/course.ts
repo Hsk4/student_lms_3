@@ -12,7 +12,7 @@ export interface ICourse extends Document {
     board: BoardType;
     levelOrGrade: string; // e.g., "1st year (Only Commerce)", "9th", "Advance Accounting"
     subjects: string[];   // e.g., ["Accounting", "Maths", "Economics", "Business Studies"]
-    createdBy: string;    // Clerk Admin userId
+    createdBy: string;    // Clerk org admin/teacher userId who owns the course
     orgId: string;        // Clerk Organization ID
     createdAt: Date;
     updatedAt: Date;

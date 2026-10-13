@@ -1,115 +1,145 @@
-import { auth, createClerkClient } from "@clerk/nextjs/server";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { toggleUserStatus, updateUserRole } from "@/app/actions/admin";
-import { UserCog, ShieldAlert, ShieldCheck, UserMinus, UserPlus } from "lucide-react";
+import { createClerkClient } from "@clerk/nextjs/server";
+import { requirePagePermission } from "@/lib/auth/guards";
+import { ORG_PERMISSIONS } from "@/lib/auth/roles";
+import { GlassPageHeader } from "@/components/glass/glass-page-header";
+import { GlassCard } from "@/components/glass/glass-card";
+import { glassTheme } from "@/lib/theme/glass";
+import { cn } from "@/lib/utils";
+import { Users, User } from "lucide-react";
 import { Suspense } from "react";
 
-export default function AdminUsersPage() {
-    return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight">User Management</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Manage roles and account status for faculty and students.
-                    </p>
-                </div>
-            </div>
+export default async function AdminUsersPage() {
+  const { orgId } = await requirePagePermission(ORG_PERMISSIONS.memberManage, { fresh: true, requireOrg: true });
 
-            <Suspense fallback={<div>Loading members...</div>}>
-                <MembersList />
-            </Suspense>
+  if (!orgId) {
+    return (
+      <div className="space-y-6">
+        <GlassPageHeader
+          title="Users & Faculty"
+          subtitle="Member Management"
+          description="Manage organization members, roles, and permissions."
+          icon={<Users className="w-6 h-6 text-emerald-300" />}
+        />
+        <div className={cn(glassTheme.bg.card, "rounded-xl p-8 text-center", glassTheme.text.secondary)}>
+          No organization selected
         </div>
+      </div>
     );
+  }
+
+  return (
+    <div className="space-y-6">
+      <GlassPageHeader
+        title="Users & Faculty"
+        subtitle="Member Management"
+        description="Manage organization members, roles, and permissions."
+        icon={<Users className="w-6 h-6 text-emerald-300" />}
+      />
+      <Suspense fallback={<div className={cn(glassTheme.bg.card, "rounded-xl p-8 text-center", glassTheme.text.secondary)}>Loading members...</div>}>
+        <UsersList orgId={orgId} />
+      </Suspense>
+    </div>
+  );
 }
 
-async function MembersList() {
-    const { orgId } = await auth();
-    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+async function UsersList({ orgId }: { orgId: string }) {
+  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
-    // In a real app, you'd probably use a search/filter, but for now we list organization members
+  try {
     const memberships = await clerkClient.organizations.getOrganizationMembershipList({
-        organizationId: orgId!,
+      organizationId: orgId,
     });
 
+    if (memberships.data.length === 0) {
+      return (
+        <GlassCard variant="premium" className="text-center py-16">
+          <Users className="w-12 h-12 text-white/40 mx-auto mb-4" />
+          <h3 className={cn(glassTheme.typography.h3, glassTheme.text.primary, "mb-2")}>No members yet</h3>
+          <p className={glassTheme.text.secondary}>Invite members to get started</p>
+        </GlassCard>
+      );
+    }
+
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Organization Members</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <div className="relative overflow-x-auto">
-                    <table className="w-full text-sm text-left text-muted-foreground">
-                        <thead className="text-xs uppercase bg-muted/50">
-                            <tr>
-                                <th className="px-6 py-3">User</th>
-                                <th className="px-6 py-3">Role</th>
-                                <th className="px-6 py-3">Status</th>
-                                <th className="px-6 py-3 text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {memberships.data.map((membership) => (
-                                <Suspense key={membership.id} fallback={<tr><td colSpan={4}>Loading user...</td></tr>}>
-                                    <UserRow membership={membership} />
-                                </Suspense>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </CardContent>
-        </Card>
+      <GlassCard variant="default">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/10">
+                <th className={cn("px-4 py-3 text-left font-semibold", glassTheme.text.secondary)}>Name</th>
+                <th className={cn("px-4 py-3 text-left font-semibold", glassTheme.text.secondary)}>Email</th>
+                <th className={cn("px-4 py-3 text-left font-semibold", glassTheme.text.secondary)}>Role</th>
+                <th className={cn("px-4 py-3 text-left font-semibold", glassTheme.text.secondary)}>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {memberships.data.map((membership) => (
+                <UserRow key={membership.id} membership={membership} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </GlassCard>
     );
+  } catch (error) {
+    console.error("Error fetching members:", error);
+    return (
+      <GlassCard variant="premium" className={cn("text-center py-8 border-red-400/30 bg-red-500/10")}>
+        <p className="text-red-300">Error loading members. Please try again.</p>
+      </GlassCard>
+    );
+  }
 }
 
-// Separate component to handle actions in a real app, but here we'll use Server Actions
-async function UserRow({ membership }: { membership: any }) {
-    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-    const user = await clerkClient.users.getUser(membership.publicUserData.userId);
-    const status = (user.publicMetadata as { status?: string })?.status || "active";
-    const role = (user.publicMetadata as { role?: string })?.role || membership.role.replace("org:", "");
+async function UserRow({ membership }: { membership: any }): Promise<any> {
+  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+
+  try {
+    const userId = membership.publicUserData?.userId;
+    if (!userId) return null;
+
+    const user = await clerkClient.users.getUser(userId);
+    const role = String(user.publicMetadata?.role || "unassigned");
+    const status = user.banned ? "deactivated" : "active";
 
     return (
-        <tr className="border-b hover:bg-muted/30 transition-colors">
-            <td className="px-6 py-4 font-medium text-foreground">
-                <div className="flex flex-col">
-                    <span>{user.firstName} {user.lastName}</span>
-                    <span className="text-xs text-muted-foreground">{user.emailAddresses[0].emailAddress}</span>
-                </div>
-            </td>
-            <td className="px-6 py-4">
-                <Badge variant="outline" className="capitalize">{role}</Badge>
-            </td>
-            <td className="px-6 py-4">
-                <Badge className={status === "active" ? "bg-emerald-500" : "bg-destructive"}>
-                    {status}
-                </Badge>
-            </td>
-            <td className="px-6 py-4 text-right space-x-2">
-                <form action={async () => {
-                    "use server";
-                    await toggleUserStatus(user.id, status);
-                }} className="inline">
-                    <Button size="sm" variant="ghost" className={status === "active" ? "text-destructive" : "text-emerald-600"}>
-                        {status === "active" ? <UserMinus className="w-4 h-4 mr-1" /> : <UserPlus className="w-4 h-4 mr-1" />}
-                        {status === "active" ? "Deactivate" : "Activate"}
-                    </Button>
-                </form>
-
-                <form action={async () => {
-                    "use server";
-                    // Toggle between teacher/student for demo
-                    const newRole = role === "teacher" ? "student" : "teacher";
-                    await updateUserRole(user.id, newRole);
-                }} className="inline">
-                    <Button size="sm" variant="ghost">
-                        <UserCog className="w-4 h-4 mr-1" />
-                        Change Role
-                    </Button>
-                </form>
-            </td>
-        </tr>
+      <tr className="border-b border-white/10 hover:bg-white/5 transition-colors">
+        <td className={cn("px-4 py-4", glassTheme.text.primary)}>
+          <div className="flex items-center gap-2">
+            <div className={cn(
+              "w-8 h-8 rounded-full flex items-center justify-center",
+              "bg-gradient-to-br from-emerald-400/20 to-emerald-600/20 border border-emerald-400/30"
+            )}>
+              <User className="w-4 h-4 text-emerald-300" />
+            </div>
+            <p className="font-medium">{user.firstName} {user.lastName}</p>
+          </div>
+        </td>
+        <td className={cn("px-4 py-4 text-xs", glassTheme.text.secondary)}>
+          {user.emailAddresses?.[0]?.emailAddress || "N/A"}
+        </td>
+        <td className={cn("px-4 py-4", glassTheme.text.primary)}>
+          <span className={cn(
+            "inline-block px-2 py-1 rounded-lg text-xs font-medium",
+            role === "admin" ? "bg-emerald-500/20 text-emerald-200 border border-emerald-400/30" :
+            role === "teacher" ? "bg-blue-500/20 text-blue-200 border border-blue-400/30" :
+            "bg-purple-500/20 text-purple-200 border border-purple-400/30"
+          )}>
+            {role}
+          </span>
+        </td>
+        <td className={cn("px-4 py-4", glassTheme.text.primary)}>
+          <span className={cn(
+            "inline-block px-2 py-1 rounded-lg text-xs font-medium",
+            status === "active" ? "bg-emerald-500/20 text-emerald-200 border border-emerald-400/30" :
+            "bg-red-500/20 text-red-200 border border-red-400/30"
+          )}>
+            {status}
+          </span>
+        </td>
+      </tr>
     );
+  } catch (error) {
+    return null;
+  }
 }

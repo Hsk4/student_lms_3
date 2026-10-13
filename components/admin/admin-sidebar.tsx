@@ -10,12 +10,15 @@ import {
     BarChart3,
     Settings,
     GraduationCap,
-    LogOut,
+    UserCheck,
+    Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { glassTheme } from "@/lib/theme/glass";
 
 const navItems = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
+    { name: "Accounts", href: "/admin/accounts", icon: UserCheck },
     { name: "Courses & Boards", href: "/admin/courses", icon: BookOpen },
     { name: "Users & Faculty", href: "/admin/users", icon: Users },
     { name: "Assignments", href: "/admin/assignments", icon: FileText },
@@ -27,21 +30,31 @@ export function AdminSidebar() {
     const pathname = usePathname();
 
     return (
-        <aside className="w-64 border-r bg-sidebar text-sidebar-foreground flex flex-col justify-between p-4 min-h-screen">
-            <div className="space-y-6">
-                {/* Logo Header */}
-                <div className="flex items-center gap-3 px-2">
-                    <div className="p-2 bg-emerald-600 text-white rounded-xl">
-                        <GraduationCap className="w-6 h-6" />
+        <aside className={cn(
+            "w-64 border-r backdrop-blur-xl flex flex-col justify-between p-6 min-h-screen",
+            glassTheme.bg.sidebar
+        )}>
+            <div className="space-y-8">
+                {/* Logo Header - Premium Glass Card */}
+                <Link href="/admin" className="flex items-center gap-3 group">
+                    <div className={cn(
+                        "p-2.5 rounded-lg transition-all shadow-lg group-hover:shadow-xl group-hover:scale-110",
+                        glassTheme.gradient.emerald
+                    )}>
+                        <GraduationCap className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                        <h2 className="font-semibold text-base leading-none">Fastly LMS</h2>
-                        <span className="text-xs text-muted-foreground">Admin Portal</span>
+                        <h2 className={cn("font-black text-lg leading-none", glassTheme.text.primary)}>
+                            Fastly
+                        </h2>
+                        <span className={cn("text-xs font-semibold tracking-wider", glassTheme.text.secondary)}>
+                            LMS ADMIN
+                        </span>
                     </div>
-                </div>
+                </Link>
 
-                {/* Navigation Menu */}
-                <nav className="space-y-1">
+                {/* Navigation Menu - Enhanced */}
+                <nav className="space-y-2">
                     {navItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href;
@@ -50,24 +63,48 @@ export function AdminSidebar() {
                                 key={item.href}
                                 href={item.href}
                                 className={cn(
-                                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-300",
                                     isActive
-                                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        ? cn(
+                                            glassTheme.bg.premium,
+                                            "text-white shadow-lg",
+                                            "border-emerald-400/50"
+                                        )
+                                        : cn(
+                                            glassTheme.text.secondary,
+                                            "hover:text-white hover:bg-white/5 hover:border-white/10"
+                                        )
                                 )}
                             >
-                                <Icon className="w-4 h-4" />
-                                {item.name}
+                                <Icon className={cn(
+                                    "w-5 h-5 transition-transform",
+                                    isActive ? "text-emerald-300 scale-110" : "text-white/60 group-hover:scale-110"
+                                )} />
+                                <span>{item.name}</span>
+                                {isActive && (
+                                    <div className="ml-auto w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                )}
                             </Link>
                         );
                     })}
                 </nav>
             </div>
 
-            {/* Bottom Card callout */}
-            <div className="p-4 bg-emerald-950 text-emerald-100 rounded-2xl space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wider text-emerald-400">System Active</p>
-                <p className="text-xs text-emerald-200">6 Boards • 24 Active Courses Configured</p>
+            {/* Bottom Info Card - Premium Glass */}
+            <div className={cn(
+                "p-4 rounded-xl space-y-3",
+                "bg-linear-to-br from-emerald-500/15 to-emerald-600/10 border border-emerald-400/30",
+                "backdrop-blur-md shadow-lg"
+            )}>
+                <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-emerald-300" />
+                    <p className={cn("text-xs font-bold uppercase tracking-wider text-emerald-200")}>
+                        System Active
+                    </p>
+                </div>
+                <p className={cn("text-xs leading-relaxed text-emerald-100/80")}>
+                    6 Boards • 24 Active Courses
+                </p>
             </div>
         </aside>
     );
