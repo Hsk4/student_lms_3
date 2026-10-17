@@ -1,207 +1,220 @@
-import { createClerkClient } from "@clerk/nextjs/server";
-import { requirePageRole } from "@/lib/auth/guards";
+"use client";
+
+import { useEffect, useState } from "react";
+import { UserCheck, Mail, Calendar, ShieldCheck, Clock } from "lucide-react";
 import { GlassPageHeader } from "@/components/glass/glass-page-header";
 import { GlassCard } from "@/components/glass/glass-card";
 import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";
-import { UserCheck, AlertCircle, Mail } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { assignRoleToUser } from "@/app/actions/admin";
-import { Suspense } from "react";
 
-export default async function AdminAccountsPage() {
-    return (
-        <div className="space-y-6">
-            <GlassPageHeader
-                title="Account Management"
-                subtitle="Member Onboarding"
-                description="Review and assign roles to pending user accounts."
-                icon={<UserCheck className="w-6 h-6 text-emerald-300" />}
-            />
-
-            <Suspense fallback={<div className={cn(glassTheme.bg.card, "rounded-xl p-8 text-center", glassTheme.text.secondary)}>Loading accounts...</div>}>
-                <PendingAccountsList />
-            </Suspense>
-        </div>
-    );
+interface PendingUser {
+  userId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  createdAt: string;
+  role: "student" | "teacher" | null;
 }
 
-async function PendingAccountsList() {
-    const { orgId } = await requirePageRole(["admin"], { requireOrg: true });
-    const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
+export default function AdminAccountsPage() {
+  const [pendingUsers, setPendingUsers] = useState<PendingUser[]>([]);
+  const [assignedUsers, setAssignedUsers] = useState<PendingUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [assigning, setAssigning] = useState<string | null>(null);
 
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const loadUsers = async () => {
+    setLoading(true);
+    setError(null);
     try {
-        const memberships = await clerkClient.organizations.getOrganizationMembershipList({
-            organizationId: orgId!,
-        });
-
-        const pendingUsers: any[] = [];
-        const assignedUsers: any[] = [];
-
-        for (const membership of memberships.data) {
-            const userId = membership.publicUserData?.userId;
-            if (!userId) continue;
-            const user = await clerkClient.users.getUser(userId);
-            const hasRole = user.publicMetadata?.role;
-
-            if (hasRole) {
-                assignedUsers.push({ user, membership });
-            } else {
-                pendingUsers.push({ user, membership });
-            }
-        }
-
-        return (
-            <div className="space-y-6">
-                {/* Pending Accounts */}
-                <GlassCard variant="default">
-                    <div className="flex items-center gap-3 mb-6 pb-6 border-b border-white/10">
-                        <AlertCircle className="w-5 h-5 text-amber-300" />
-                        <h3 className={cn(glassTheme.typography.h3, glassTheme.text.primary)}>
-                            Pending Accounts
-                        </h3>
-                        <Badge className="ml-auto bg-amber-500/30 text-amber-200 border-amber-400/50">
-                            {pendingUsers.length}
-                        </Badge>
-                    </div>
-
-                    {pendingUsers.length === 0 ? (
-                        <div className="text-center py-12">
-                            <UserCheck className="w-12 h-12 text-white/20 mx-auto mb-4" />
-                            <p className={cn("text-sm", glassTheme.text.secondary)}>
-                                No pending accounts. All users have been assigned roles.
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="space-y-3">
-                            {pendingUsers.map(({ user, membership }) => (
-                                <div key={user.id} className={cn(
-                                    "p-4 rounded-lg border transition-all",
-                                    "bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20"
-                                )}>
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div className="flex items-start gap-3 flex-1">
-                                            <div className={cn(
-                                                "w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0",
-                                                "bg-gradient-to-br from-emerald-400/20 to-emerald-600/20 border border-emerald-400/30"
-                                            )}>
-                                                <Mail className="w-5 h-5 text-emerald-300" />
-                                            </div>
-                                            <div>
-                                                <p className={cn("font-semibold", glassTheme.text.primary)}>
-                                                    {user.firstName} {user.lastName}
-                                                </p>
-                                                <p className={cn("text-sm mt-1", glassTheme.text.secondary)}>
-                                                    {user.emailAddresses[0]?.emailAddress}
-                                                </p>
-                                                <p className={cn("text-xs mt-1", glassTheme.text.muted)}>
-                                                    Joined {new Date(user.createdAt).toLocaleDateString()}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <Badge className="bg-yellow-500/20 text-yellow-300 border-yellow-400/30">
-                                            Pending
-                                        </Badge>
-                                    </div>
-
-                                    <div className="flex gap-2">
-                                        <form action={async () => {
-                                            "use server";
-                                            await assignRoleToUser(user.id, "student");
-                                        }} className="flex-1">
-                                            <Button
-                                                type="submit"
-                                                className={cn(
-                                                    "w-full h-8 text-xs font-semibold",
-                                                    "bg-blue-500/20 text-blue-300 hover:bg-blue-500/30 border border-blue-400/30 transition-all"
-                                                )}
-                                            >
-                                                Assign Student
-                                            </Button>
-                                        </form>
-                                        <form action={async () => {
-                                            "use server";
-                                            await assignRoleToUser(user.id, "teacher");
-                                        }} className="flex-1">
-                                            <Button
-                                                type="submit"
-                                                className={cn(
-                                                    "w-full h-8 text-xs font-semibold",
-                                                    "bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 border border-emerald-400/30 transition-all"
-                                                )}
-                                            >
-                                                Assign Teacher
-                                            </Button>
-                                        </form>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </GlassCard>
-
-                {/* Assigned Users */}
-                {assignedUsers.length > 0 && (
-                    <GlassCard variant="default">
-                        <div className="flex items-center gap-3 mb-6 pb-6 border-b border-white/10">
-                            <UserCheck className="w-5 h-5 text-emerald-300" />
-                            <h3 className={cn(glassTheme.typography.h3, glassTheme.text.primary)}>
-                                Assigned Users
-                            </h3>
-                            <Badge className="ml-auto bg-emerald-500/30 text-emerald-200 border-emerald-400/50">
-                                {assignedUsers.length}
-                            </Badge>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="border-b border-white/10">
-                                        <th className={cn("px-4 py-3 text-left font-semibold", glassTheme.text.secondary)}>User</th>
-                                        <th className={cn("px-4 py-3 text-left font-semibold", glassTheme.text.secondary)}>Email</th>
-                                        <th className={cn("px-4 py-3 text-left font-semibold", glassTheme.text.secondary)}>Role</th>
-                                        <th className={cn("px-4 py-3 text-left font-semibold", glassTheme.text.secondary)}>Assigned</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {assignedUsers.map(({ user }) => (
-                                        <tr key={user.id} className="border-b border-white/10 hover:bg-white/5 transition-colors">
-                                            <td className={cn("px-4 py-3", glassTheme.text.primary)}>
-                                                {user.firstName} {user.lastName}
-                                            </td>
-                                            <td className={cn("px-4 py-3 text-xs", glassTheme.text.secondary)}>
-                                                {user.emailAddresses[0]?.emailAddress}
-                                            </td>
-                                            <td className={cn("px-4 py-3")}>
-                                                <Badge className={cn(
-                                                    user.publicMetadata?.role === "teacher"
-                                                        ? "bg-emerald-500/30 text-emerald-200 border-emerald-400/50"
-                                                        : "bg-blue-500/30 text-blue-200 border-blue-400/50"
-                                                )}>
-                                                    {user.publicMetadata?.role}
-                                                </Badge>
-                                            </td>
-                                            <td className={cn("px-4 py-3 text-xs", glassTheme.text.muted)}>
-                                                {new Date(user.createdAt).toLocaleDateString()}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </GlassCard>
-                )}
-            </div>
-        );
-    } catch (error) {
-        console.error("Error fetching accounts:", error);
-        return (
-            <GlassCard variant="premium" className={cn("border-red-400/30 bg-red-500/10 text-center py-8")}>
-                <AlertCircle className="w-8 h-8 text-red-300 mx-auto mb-3" />
-                <p className="text-red-300 font-semibold">Error Loading Accounts</p>
-                <p className={cn("text-sm mt-1", "text-red-200/70")}>Please try again later or contact support.</p>
-            </GlassCard>
-        );
+      const response = await fetch("/api/admin/users");
+      if (!response.ok) {
+        throw new Error("Failed to fetch users");
+      }
+      const data = await response.json();
+      setPendingUsers(data.pending || []);
+      setAssignedUsers(data.assigned || []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load users");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  const handleAssignRole = async (userId: string, role: "student" | "teacher") => {
+    setAssigning(userId);
+    try {
+      const result = await assignRoleToUser(userId, role) as any;
+      if (result?.success) {
+        // Move user from pending to assigned
+        const user = pendingUsers.find(u => u.userId === userId);
+        if (user) {
+          setPendingUsers(pendingUsers.filter(u => u.userId !== userId));
+          setAssignedUsers([...assignedUsers, { ...user, role }]);
+        }
+      } else {
+        setError(result.error || "Failed to assign role");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign role");
+    } finally {
+      setAssigning(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <GlassPageHeader
+        title="Account Management"
+        subtitle="Member Onboarding"
+        description="Review and assign roles to pending user accounts."
+        icon={<UserCheck className="w-6 h-6 text-teal-400" />}
+      />
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-400/30 rounded-lg p-4 text-red-300">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <p className={glassTheme.text.secondary}>Loading accounts...</p>
+        </div>
+      ) : (
+        <>
+          {/* Pending Users Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <Clock className="w-5 h-5 text-amber-400" />
+              <h2 className={cn("text-xl font-bold", glassTheme.text.primary)}>
+                Pending Users ({pendingUsers.length})
+              </h2>
+            </div>
+
+            {pendingUsers.length === 0 ? (
+              <GlassCard variant="default" className="text-center py-12">
+                <p className={glassTheme.text.secondary}>No pending users awaiting role assignment</p>
+              </GlassCard>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {pendingUsers.map((user) => (
+                  <GlassCard key={user.userId} variant="default">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className={cn("text-lg font-semibold", glassTheme.text.primary)}>
+                            {user.firstName} {user.lastName}
+                          </h3>
+                          <span className="px-2 py-1 rounded-lg text-xs font-medium bg-amber-500/20 text-amber-300 border border-amber-400/30">
+                            Pending
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Mail className="w-4 h-4 text-teal-400" />
+                            <span className={glassTheme.text.secondary}>{user.email}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Calendar className="w-4 h-4 text-teal-400" />
+                            <span className={glassTheme.text.secondary}>
+                              Joined {new Date(user.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-2 ml-4">
+                        <button
+                          onClick={() => handleAssignRole(user.userId, "student")}
+                          disabled={assigning === user.userId}
+                          className={cn(
+                            "px-4 py-2 rounded-lg font-semibold text-sm transition-all",
+                            "bg-blue-500/20 border border-blue-400/30",
+                            "text-blue-300 hover:bg-blue-500/30 hover:border-blue-400/50",
+                            "disabled:opacity-50 disabled:cursor-not-allowed"
+                          )}
+                        >
+                          {assigning === user.userId ? "Assigning..." : "Student"}
+                        </button>
+                        <button
+                          onClick={() => handleAssignRole(user.userId, "teacher")}
+                          disabled={assigning === user.userId}
+                          className={cn(
+                            "px-4 py-2 rounded-lg font-semibold text-sm transition-all",
+                            "bg-emerald-500/20 border border-emerald-400/30",
+                            "text-emerald-300 hover:bg-emerald-500/30 hover:border-emerald-400/50",
+                            "disabled:opacity-50 disabled:cursor-not-allowed"
+                          )}
+                        >
+                          {assigning === user.userId ? "Assigning..." : "Teacher"}
+                        </button>
+                      </div>
+                    </div>
+                  </GlassCard>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Assigned Users Section */}
+          <div className="space-y-4 pt-8 border-t border-teal-500/20">
+            <div className="flex items-center gap-3">
+              <ShieldCheck className="w-5 h-5 text-emerald-400" />
+              <h2 className={cn("text-xl font-bold", glassTheme.text.primary)}>
+                Assigned Users ({assignedUsers.length})
+              </h2>
+            </div>
+
+            {assignedUsers.length === 0 ? (
+              <GlassCard variant="default" className="text-center py-12">
+                <p className={glassTheme.text.secondary}>No users have been assigned roles yet</p>
+              </GlassCard>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {assignedUsers.map((user) => (
+                  <GlassCard key={user.userId} variant="default">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className={cn("text-lg font-semibold", glassTheme.text.primary)}>
+                            {user.firstName} {user.lastName}
+                          </h3>
+                          <span className={cn(
+                            "px-2 py-1 rounded-lg text-xs font-medium border",
+                            user.role === "teacher"
+                              ? "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                              : "bg-blue-500/20 text-blue-300 border-blue-400/30"
+                          )}>
+                            {user.role === "teacher" ? "Teacher" : "Student"}
+                          </span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-sm">
+                            <Mail className="w-4 h-4 text-teal-400" />
+                            <span className={glassTheme.text.secondary}>{user.email}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm">
+                            <Calendar className="w-4 h-4 text-teal-400" />
+                            <span className={glassTheme.text.secondary}>
+                              Joined {new Date(user.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </GlassCard>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
 }

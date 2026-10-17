@@ -1,5 +1,5 @@
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
-import { UserButton } from "@clerk/nextjs";
+import { AdminUserButton } from "@/app/components/admin-user-button";
 import { Search, Bell, Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -71,9 +71,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
                             <Sparkles className="w-5 h-5" />
                         </button>
 
-                        <Suspense fallback={<div className="w-9 h-9 rounded-full bg-white/10 animate-pulse" />}>
-                            <UserButton />
-                        </Suspense>
+                        <AdminUserButton />
                     </div>
                 </header>
 
