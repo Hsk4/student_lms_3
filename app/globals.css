@@ -128,3 +128,79 @@
     @apply font-sans;
   }
 }
+
+
+
+/*  !  ===== STUDENT DASBOARD STYLE =====  // */
+
+
+@import "tailwindcss";
+
+/* ---------- Tokens ---------- */
+:root {
+  --background: #0a0e1a;       /* deep navy base */
+  --foreground: #e2e8f0;
+  --panel: #0f1524;            /* card surface */
+  --panel-muted: #141b2e;
+  --line: #1e293b;
+
+  --brand: #6366f1;            /* indigo-500 */
+  --brand-soft: rgba(99,102,241,0.15);
+  --accent: #22d3ee;           /* cyan-400 */
+
+  --muted: #94a3b8;
+  --muted-light: #64748b;
+
+  --radius-lg: 24px;
+  --radius-md: 16px;
+  --radius-sm: 10px;
+
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.4), 0 12px 28px -12px rgba(0,0,0,0.5);
+  --shadow-glow: 0 0 0 1px rgba(99,102,241,0.2), 0 12px 32px -8px rgba(99,102,241,0.25);
+}
+
+* { box-sizing: border-box; }
+
+html { color-scheme: dark; scroll-behavior: smooth; }
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(99,102,241,0.08), transparent 45%),
+    radial-gradient(circle at 85% 15%, rgba(34,211,238,0.06), transparent 40%);
+  background-attachment: fixed;
+}
+
+*:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+* { scrollbar-width: thin; scrollbar-color: #334155 transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+::selection { background: rgba(99, 102, 241, 0.4); }
+
+.card-surface {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.card-surface:hover {
+  box-shadow: var(--shadow-glow);
+  border-color: rgba(99,102,241,0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
