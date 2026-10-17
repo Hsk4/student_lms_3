@@ -16,38 +16,55 @@ import {
 } from "@/lib/auth/guards";
 import { ORG_PERMISSIONS, roleMatches, toClerkOrgRole } from "@/lib/auth/roles";
 
+type ActionResult<T> = { success: true; data?: T } | { success: false; error: string };
+
 // 1. Assign User (Teacher or Student) to Course
 export async function assignUserToCourse(data: {
   userId: string;
   courseId: string;
   role: "teacher" | "student";
-}) {
-  const { userId, orgId } = await requirePermission(ORG_PERMISSIONS.memberManage, {
-    fresh: true,
-    requireOrg: true,
-  });
-  const membership = await assertUserInOrg(orgId!, data.userId);
+}): Promise<ActionResult<string>> {
+  try {
+    const { userId, orgId } = await requirePermission(ORG_PERMISSIONS.memberManage, {
+      fresh: true,
+      requireOrg: true,
+    });
 
-  if (!roleMatches(membership.role as never, toClerkOrgRole(data.role))) {
-    throw new AuthError("FORBIDDEN", 403);
+    const membership = await assertUserInOrg(orgId!, data.userId);
+
+    if (!roleMatches(membership.role as never, toClerkOrgRole(data.role))) {
+      throw new AuthError("User role does not match requested course role", 403);
+    }
+
+    const target = await clerk.users.getUser(data.userId);
+    if (target.banned) {
+      throw new AuthError("Target user is banned", 403);
+    }
+
+    await connectToDatabase();
+    if (!(await Course.exists({ _id: data.courseId, orgId }))) {
+      throw new AuthError("Course not found", 404);
+    }
+
+    const enrollment = await Enrollment.findOneAndUpdate(
+      { orgId, userId: data.userId, courseId: data.courseId },
+      { ...data, orgId, assignedBy: userId, status: "approved" },
+      { upsert: true, new: true }
+    );
+
+    revalidatePath("/admin/users");
+    revalidatePath("/teacher");
+    revalidatePath("/student");
+    return { success: true, data: enrollment._id.toString() };
+  } catch (error) {
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to assign user to course";
+    console.error("assignUserToCourse error:", message);
+    return { success: false, error: message };
   }
-
-  const target = await clerk.users.getUser(data.userId);
-  if (target.banned) throw new AuthError("FORBIDDEN", 403);
-
-  await connectToDatabase();
-  if (!(await Course.exists({ _id: data.courseId, orgId }))) {
-    throw new AuthError("NOT_FOUND", 404);
-  }
-
-  const enrollment = await Enrollment.findOneAndUpdate(
-    { orgId, userId: data.userId, courseId: data.courseId },
-    { ...data, orgId, assignedBy: userId, status: "approved" },
-    { upsert: true, new: true }
-  );
-
-  revalidatePath("/admin/users");
-  return { success: true, enrollmentId: enrollment._id.toString() };
 }
 
 // 2. Create Assignment (Admin & Teachers)
@@ -58,22 +75,33 @@ export async function createAssignment(data: {
   subject: string;
   dueDate: Date;
   starterSnippetId?: string;
-}) {
-  const { userId, orgId } = await requirePermission(ORG_PERMISSIONS.courseManage, {
-    requireOrg: true,
-  });
+}): Promise<ActionResult<string>> {
+  try {
+    const { userId, orgId } = await requirePermission(ORG_PERMISSIONS.courseManage, {
+      fresh: true,
+      requireOrg: true,
+    });
 
-  await connectToDatabase();
-  await requireCourseAccess(data.courseId, "manage");
+    await connectToDatabase();
+    await requireCourseAccess(data.courseId, "manage");
 
-  const assignment = await Assignment.create({
-    ...data,
-    createdBy: userId,
-    orgId: orgId!,
-  });
+    const assignment = await Assignment.create({
+      ...data,
+      createdBy: userId,
+      orgId: orgId!,
+    });
 
-  revalidatePath("/dashboard/assignments");
-  return { success: true, assignmentId: assignment._id.toString() };
+    revalidatePath("/dashboard/assignments");
+    return { success: true, data: assignment._id.toString() };
+  } catch (error) {
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to create assignment";
+    console.error("createAssignment error:", message);
+    return { success: false, error: message };
+  }
 }
 
 // 3. Publish Mock Paper (Admin Only)
@@ -85,21 +113,31 @@ export async function createMockPaper(data: {
   year?: number;
   fileUrl?: string;
   solutionsUrl?: string;
-}) {
-  const { userId, orgId } = await requirePermission(ORG_PERMISSIONS.courseManage, {
-    fresh: true,
-    requireOrg: true,
-  });
+}): Promise<ActionResult<string>> {
+  try {
+    const { userId, orgId } = await requirePermission(ORG_PERMISSIONS.courseManage, {
+      fresh: true,
+      requireOrg: true,
+    });
 
-  await connectToDatabase();
-  const mock = await MockPaper.create({
-    ...data,
-    createdBy: userId,
-    orgId: orgId!,
-  });
+    await connectToDatabase();
+    const mock = await MockPaper.create({
+      ...data,
+      createdBy: userId,
+      orgId: orgId!,
+    });
 
-  revalidatePath("/dashboard/mock-papers");
-  return { success: true, mockId: mock._id.toString() };
+    revalidatePath("/dashboard/mock-papers");
+    return { success: true, data: mock._id.toString() };
+  } catch (error) {
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to create mock paper";
+    console.error("createMockPaper error:", message);
+    return { success: false, error: message };
+  }
 }
 
 // Shared checks for admin actions that modify another user.
@@ -108,74 +146,123 @@ async function requireManageableTarget(targetUserId: string) {
     fresh: true,
     requireOrg: true,
   });
-  if (targetUserId === ctx.userId) {
-    throw new AuthError("Forbidden: you cannot modify your own account.", 403);
-  }
-  const membership = await assertUserInOrg(ctx.orgId!, targetUserId);
 
-  const target = await clerk.users.getUser(targetUserId);
-  if (membership.role === "org:admin") {
-    throw new AuthError("Forbidden: admin accounts can't be modified here.", 403);
+  if (targetUserId === ctx.userId) {
+    throw new AuthError("You cannot modify your own account", 403);
   }
+
+  const membership = await assertUserInOrg(ctx.orgId!, targetUserId);
+  const target = await clerk.users.getUser(targetUserId);
+
+  if (membership.role === "org:admin") {
+    throw new AuthError("Admin accounts cannot be modified here", 403);
+  }
+
   return { ctx, target, membership };
 }
 
 // 4. Assign Role to Pending User (from accounts panel)
-export async function assignRoleToUser(targetUserId: string, role: "student" | "teacher") {
-  const { ctx, target, membership } = await requireManageableTarget(targetUserId);
+export async function assignRoleToUser(
+  targetUserId: string,
+  role: "student" | "teacher"
+): Promise<ActionResult<string>> {
+  try {
+    const { ctx, target } = await requireManageableTarget(targetUserId);
 
-  // Update user's public metadata with the assigned role
-  await clerk.users.updateUserMetadata(target.id, {
-    publicMetadata: {
-      role: role,
-      status: "active",
-    },
-  });
+    await clerk.users.updateUserMetadata(target.id, {
+      publicMetadata: {
+        role: role,
+        status: "active",
+      },
+    });
 
-  // Update Clerk organization membership role
-  await clerk.organizations.updateOrganizationMembership({
-    organizationId: ctx.orgId!,
-    userId: target.id,
-    role: toClerkOrgRole(role),
-  });
+    await clerk.organizations.updateOrganizationMembership({
+      organizationId: ctx.orgId!,
+      userId: target.id,
+      role: toClerkOrgRole(role),
+    });
 
-  revalidatePath("/admin/accounts");
-  return { success: true, role };
+    revalidatePath("/admin/accounts");
+    return { success: true, data: role };
+  } catch (error) {
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to assign role";
+    console.error("assignRoleToUser error:", message);
+    return { success: false, error: message };
+  }
 }
 
 // 5. Approve User (mark as active from pending)
-export async function approveUser(targetUserId: string) {
-  const { target } = await requireManageableTarget(targetUserId);
+export async function approveUser(targetUserId: string): Promise<ActionResult<null>> {
+  try {
+    const { target } = await requireManageableTarget(targetUserId);
 
-  if (target.banned) {
-    await clerk.users.unbanUser(target.id);
+    if (target.banned) {
+      await clerk.users.unbanUser(target.id);
+    }
+
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to approve user";
+    console.error("approveUser error:", message);
+    return { success: false, error: message };
   }
-
-  revalidatePath("/admin/users");
-  return { success: true, status: "active" };
 }
 
-// 5. Toggle User Activation Status
-export async function toggleUserStatus(targetUserId: string) {
-  const { target } = await requireManageableTarget(targetUserId);
+// 6. Toggle User Activation Status
+export async function toggleUserStatus(targetUserId: string): Promise<ActionResult<string>> {
+  try {
+    const { target } = await requireManageableTarget(targetUserId);
 
-  const newStatus = target.banned ? "active" : "deactivated";
-  if (target.banned) await clerk.users.unbanUser(target.id);
-  else await clerk.users.banUser(target.id);
+    if (target.banned) {
+      await clerk.users.unbanUser(target.id);
+    } else {
+      await clerk.users.banUser(target.id);
+    }
 
-  revalidatePath("/admin/users");
-  return { success: true, newStatus };
+    const newStatus = target.banned ? "active" : "deactivated";
+    revalidatePath("/admin/users");
+    return { success: true, data: newStatus };
+  } catch (error) {
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to toggle user status";
+    console.error("toggleUserStatus error:", message);
+    return { success: false, error: message };
+  }
 }
 
-// 6. Change User Role (teacher <-> student only; admins are granted out-of-band)
-export async function updateUserRole(targetUserId: string, newRole: "teacher" | "student") {
-  const { ctx, target } = await requireManageableTarget(targetUserId);
-  await updateOrganizationMemberRole(ctx.orgId!, target.id, newRole);
+// 7. Change User Role (teacher <-> student only; admins are granted out-of-band)
+export async function updateUserRole(
+  targetUserId: string,
+  newRole: "teacher" | "student"
+): Promise<ActionResult<null>> {
+  try {
+    const { ctx, target } = await requireManageableTarget(targetUserId);
+    await updateOrganizationMemberRole(ctx.orgId!, target.id, newRole);
 
-  // Old per-course teacher/student enrollments no longer match the new role.
-  await connectToDatabase();
-  await Enrollment.deleteMany({ orgId: ctx.orgId, userId: target.id });
+    await connectToDatabase();
+    await Enrollment.deleteMany({ orgId: ctx.orgId, userId: target.id });
 
-  revalidatePath("/admin/users");
-  return { success: true };
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to update user role";
+    console.error("updateUserRole error:", message);
+    return { success: false, error: message };
+  }
 }

@@ -87,13 +87,17 @@ export async function addToSchoolOrg(userId: string, role: SelfAssignableRole) {
 }
 
 async function getFreshOrgRole(orgId: string, userId: string): Promise<ClerkOrgRole | null> {
-    'use cache';
-    const memberships = await clerk.organizations.getOrganizationMembershipList({
-        organizationId: orgId,
-        userId: [userId],
-        limit: 1,
-    });
-    return (memberships.data[0]?.role as ClerkOrgRole | undefined) ?? null;
+    try {
+        const memberships = await clerk.organizations.getOrganizationMembershipList({
+            organizationId: orgId,
+            userId: [userId],
+            limit: 1,
+        });
+        return (memberships.data[0]?.role as ClerkOrgRole | undefined) ?? null;
+    } catch (error) {
+        console.error("Error fetching fresh org role:", error);
+        return null;
+    }
 }
 async function resolveContext(opts: GuardOptions = {}): Promise<AuthContext> {
     const { userId, orgId: activeOrgId, orgRole: tokenOrgRole } = await auth();

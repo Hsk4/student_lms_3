@@ -2,11 +2,11 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { addToSchoolOrg, clerk, SCHOOL_ORG_ID } from "@/lib/auth/guards";
-import { isRole, isSelfAssignableRole, type Role } from "@/lib/auth/roles";
+import { isRole, isSelfAssignableRole, toClerkOrgRole, type Role } from "@/lib/auth/roles";
 
-// Teachers can self-register, so by default they wait for admin approval.
-// Set TEACHER_AUTO_APPROVE=true to skip that.
 const teachersNeedApproval = () => process.env.TEACHER_AUTO_APPROVE !== "true";
+
+type RoleResult = { role: Role | null; error?: string };
 
 /**
  * Assigns the user's role exactly ONCE and only to a non-privileged role.
@@ -17,6 +17,7 @@ const teachersNeedApproval = () => process.env.TEACHER_AUTO_APPROVE !== "true";
  *   leaves them role-less and the flow simply retries.
  */
 async function assignInitialRole(userId: string, requested: unknown): Promise<Role | null> {
+  try {
     const user = await clerk.users.getUser(userId);
 
     const existing = (user.publicMetadata as { role?: unknown }).role;
@@ -30,38 +31,61 @@ async function assignInitialRole(userId: string, requested: unknown): Promise<Ro
     const membershipRole = requested === "teacher" && teachersNeedApproval() ? "org:student" : toClerkOrgRole(requested);
 
     await clerk.users.updateUserMetadata(userId, {
-        publicMetadata: { role: requested, status },
+      publicMetadata: { role: requested, status },
     });
 
-    // Ensure membership role matches approval status: pending teachers get student-level access
     await clerk.organizations.updateOrganizationMembership({
-        organizationId: SCHOOL_ORG_ID!,
-        userId,
-        role: membershipRole,
+      organizationId: SCHOOL_ORG_ID!,
+      userId,
+      role: membershipRole,
     });
 
     return requested;
+  } catch (error) {
+    console.error("assignInitialRole error:", error);
+    return null;
+  }
 }
 
 /** Called right after sign-up: applies the role chosen on the sign-up form. */
-export async function syncRoleFromSignup(): Promise<{ role: Role | null }> {
+export async function syncRoleFromSignup(): Promise<RoleResult> {
+  try {
     const { userId } = await auth();
-    if (!userId) throw new Error("Unauthorized");
+    if (!userId) {
+      return { role: null, error: "Unauthorized" };
+    }
 
     const user = await clerk.users.getUser(userId);
     const requested = (user.unsafeMetadata as { role?: unknown }).role;
-    return { role: await assignInitialRole(userId, requested) };
+    const role = await assignInitialRole(userId, requested);
+    return { role };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to sync role";
+    console.error("syncRoleFromSignup error:", message);
+    return { role: null, error: message };
+  }
 }
 
 /** Fallback picker for users who signed up without a role (e.g. generic /sign-up). */
-export async function setUserRole(role: unknown): Promise<{ role: Role }> {
+export async function setUserRole(role: unknown): Promise<RoleResult> {
+  try {
     const { userId } = await auth();
-    if (!userId) throw new Error("Unauthorized");
+    if (!userId) {
+      return { role: null, error: "Unauthorized" };
+    }
 
-    // Runtime validation: server action arguments come from the client.
-    if (!isSelfAssignableRole(role)) throw new Error("Invalid role");
+    if (!isSelfAssignableRole(role)) {
+      return { role: null, error: "Invalid role" };
+    }
 
     const assigned = await assignInitialRole(userId, role);
-    if (!assigned) throw new Error("Could not assign role");
+    if (!assigned) {
+      return { role: null, error: "Could not assign role" };
+    }
     return { role: assigned };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to set role";
+    console.error("setUserRole error:", message);
+    return { role: null, error: message };
+  }
 }

@@ -7,6 +7,8 @@ import { BookOpen, FileCheck, TrendingUp, Calendar } from "lucide-react";
 import { connectToDatabase } from "@/lib/db";
 import { Enrollment } from "@/app/models/Enrollment";
 
+export const instant = false;
+
 export default async function StudentPage() {
   // Only students can access, admins/teachers cannot
   const { userId, orgId } = await requirePageRole(["student"], { requireOrg: true });

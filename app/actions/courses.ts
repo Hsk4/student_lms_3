@@ -7,19 +7,29 @@ import { Enrollment } from "@/app/models/Enrollment";
 import { requirePagePermission, AuthError } from "@/lib/auth/guards";
 import { ORG_PERMISSIONS } from "@/lib/auth/roles";
 
+type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
+
 /**
  * Get all courses for an organization
  */
-export async function getCoursesByOrg() {
+export async function getCoursesByOrg(): Promise<ActionResult<any[]>> {
   try {
-    const ctx = await requirePagePermission(ORG_PERMISSIONS.courseView, { requireOrg: true });
+    const ctx = await requirePagePermission(ORG_PERMISSIONS.courseView, { 
+      requireOrg: true,
+      fresh: true,
+    });
     await connectToDatabase();
 
     const courses = await Course.find({ orgId: ctx.orgId }).sort({ createdAt: -1 }).lean();
     return { success: true, data: JSON.parse(JSON.stringify(courses)) };
   } catch (error) {
-    console.error("Error fetching courses:", error);
-    return { success: false, error: "Failed to fetch courses" };
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to fetch courses";
+    console.error("getCoursesByOrg error:", message);
+    return { success: false, error: message };
   }
 }
 
@@ -30,14 +40,18 @@ export async function createCourse(data: {
   board: string;
   levelOrGrade: string;
   subjects: string[];
-}) {
+}): Promise<ActionResult<any>> {
   try {
-    const ctx = await requirePagePermission(ORG_PERMISSIONS.courseManage, { fresh: true, requireOrg: true });
-    await connectToDatabase();
+    const ctx = await requirePagePermission(ORG_PERMISSIONS.courseManage, { 
+      fresh: true, 
+      requireOrg: true 
+    });
 
-    if (!data.board || !data.levelOrGrade || !data.subjects?.length) {
-      return { success: false, error: "Missing required fields" };
+    if (!data.board?.trim() || !data.levelOrGrade?.trim() || !data.subjects?.length) {
+      return { success: false, error: "Missing required fields: board, levelOrGrade, subjects" };
     }
+
+    await connectToDatabase();
 
     const course = await Course.create({
       board: data.board,
@@ -47,52 +61,64 @@ export async function createCourse(data: {
       orgId: ctx.orgId,
     } as Partial<ICourse>);
 
-    try {
-      revalidatePath("/admin/courses");
-    } catch (e) {}
-
+    revalidatePath("/admin/courses");
     return { success: true, data: JSON.parse(JSON.stringify(course)) };
   } catch (error) {
-    console.error("Error creating course:", error);
-    return { success: false, error: "Failed to create course" };
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to create course";
+    console.error("createCourse error:", message);
+    return { success: false, error: message };
   }
 }
 
 /**
  * Delete a course
  */
-export async function deleteCourse(courseId: string) {
+export async function deleteCourse(courseId: string): Promise<ActionResult<null>> {
   try {
-    const ctx = await requirePagePermission(ORG_PERMISSIONS.courseManage, { fresh: true, requireOrg: true });
+    const ctx = await requirePagePermission(ORG_PERMISSIONS.courseManage, { 
+      fresh: true, 
+      requireOrg: true 
+    });
     await connectToDatabase();
 
     const course = await Course.findOne({ _id: courseId, orgId: ctx.orgId });
-    if (!course) throw new AuthError("NOT_FOUND", 404);
+    if (!course) {
+      throw new AuthError("Course not found", 404);
+    }
 
     if (course.createdBy !== ctx.userId && !ctx.has({ permission: ORG_PERMISSIONS.memberManage })) {
-      throw new AuthError("FORBIDDEN", 403);
+      throw new AuthError("Not authorized to delete this course", 403);
     }
 
     await Enrollment.deleteMany({ courseId });
     await Course.findByIdAndDelete(courseId);
 
-    try {
-      revalidatePath("/admin/courses");
-    } catch (e) {}
-
-    return { success: true };
+    revalidatePath("/admin/courses");
+    return { success: true, data: null };
   } catch (error) {
-    console.error("Error deleting course:", error);
-    return { success: false, error: "Failed to delete course" };
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to delete course";
+    console.error("deleteCourse error:", message);
+    return { success: false, error: message };
   }
 }
 
 /**
  * Get courses for a specific user
  */
-export async function getUserCourses() {
+export async function getUserCourses(): Promise<ActionResult<any[]>> {
   try {
-    const ctx = await requirePagePermission(ORG_PERMISSIONS.courseView, { requireOrg: true });
+    const ctx = await requirePagePermission(ORG_PERMISSIONS.courseView, { 
+      requireOrg: true,
+      fresh: true,
+    });
     await connectToDatabase();
 
     const enrollments = await Enrollment.find({
@@ -103,10 +129,15 @@ export async function getUserCourses() {
       .populate("courseId")
       .lean();
 
-    const courses = enrollments.map((e: any) => e.courseId);
+    const courses = enrollments.map((e: any) => e.courseId).filter(Boolean);
     return { success: true, data: JSON.parse(JSON.stringify(courses)) };
   } catch (error) {
-    console.error("Error fetching user courses:", error);
-    return { success: false, error: "Failed to fetch courses" };
+    const message = error instanceof AuthError 
+      ? error.message 
+      : error instanceof Error 
+      ? error.message 
+      : "Failed to fetch courses";
+    console.error("getUserCourses error:", message);
+    return { success: false, error: message };
   }
 }

@@ -1,5 +1,4 @@
-import { createClerkClient } from "@clerk/nextjs/server";
-import { requirePagePermission } from "@/lib/auth/guards";
+import { clerk, requirePagePermission } from "@/lib/auth/guards";
 import { ORG_PERMISSIONS } from "@/lib/auth/roles";
 import { GlassPageHeader } from "@/components/glass/glass-page-header";
 import { GlassCard } from "@/components/glass/glass-card";
@@ -43,10 +42,8 @@ export default async function AdminUsersPage() {
 }
 
 async function UsersList({ orgId }: { orgId: string }) {
-  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-
   try {
-    const memberships = await clerkClient.organizations.getOrganizationMembershipList({
+    const memberships = await clerk.organizations.getOrganizationMembershipList({
       organizationId: orgId,
     });
 
@@ -92,13 +89,11 @@ async function UsersList({ orgId }: { orgId: string }) {
 }
 
 async function UserRow({ membership }: { membership: any }): Promise<any> {
-  const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
-
   try {
     const userId = membership.publicUserData?.userId;
     if (!userId) return null;
 
-    const user = await clerkClient.users.getUser(userId);
+    const user = await clerk.users.getUser(userId);
     const role = String(user.publicMetadata?.role || "unassigned");
     const status = user.banned ? "deactivated" : "active";
 
