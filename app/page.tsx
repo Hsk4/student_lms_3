@@ -2,6 +2,35 @@ import Link from "next/link";
 import { GraduationCap, BookOpen, Users, BarChart3, ShieldCheck, Zap, ArrowRight, CheckCircle2 } from "lucide-react";
 import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";
+import { auth } from "@clerk/nextjs/server";
+import { Suspense } from "react";
+import { ClerkComponents } from "./components/clerk-header";
+import {
+  appRoleFromClerkRole,
+  canRoleAccessPermission,
+  isClerkOrgRole,
+  ORG_PERMISSIONS,
+} from "@/lib/auth/roles";
+
+async function HeaderContent() {
+  const { userId, orgId, orgRole } = await auth();
+  const normalizedOrgRole = isClerkOrgRole(orgRole) ? orgRole : null;
+  const role = appRoleFromClerkRole(normalizedOrgRole);
+  const canManageMembers = canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.memberManage);
+  const canManageCourses = canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseManage);
+  const canViewCourses = canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseView);
+
+  return (
+    <ClerkComponents
+      userId={userId ?? null}
+      orgId={orgId ?? null}
+      role={role ?? null}
+      canManageMembers={canManageMembers}
+      canManageCourses={canManageCourses}
+      canViewCourses={canViewCourses}
+    />
+  );
+}
 
 export default function Home() {
   return (
@@ -23,18 +52,15 @@ export default function Home() {
             <span className={cn("font-bold text-lg hidden sm:inline", glassTheme.text.primary)}>Fastly LMS</span>
           </Link>
 
-          <div className="flex gap-3">
-            <Link href="/sign-in">
-              <button className={cn("px-4 py-2 rounded-lg text-sm font-medium transition-all", glassTheme.text.secondary, "hover:text-white")}>
-                Sign In
-              </button>
-            </Link>
-            <Link href="/sign-up">
-              <button className="px-6 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all">
-                Get Started
-              </button>
-            </Link>
-          </div>
+          <Suspense
+            fallback={
+              <div className="flex gap-3">
+                <div className="h-10 w-20 bg-white/10 animate-pulse rounded-lg" />
+              </div>
+            }
+          >
+            <HeaderContent />
+          </Suspense>
         </div>
       </nav>
 

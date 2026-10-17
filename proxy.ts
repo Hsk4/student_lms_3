@@ -58,13 +58,24 @@ export default clerkMiddleware(async (auth, req) => {
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
 
-  // 3. Coarse permission gates by area. Server actions must still re-check.
-  if (isAdminArea(req) && !canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.memberManage)) {
+  // 3. Permission-based area access
+  // ADMINS CAN ACCESS ALL PORTALS - add this check first
+  const isAdmin = canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.memberManage);
+  
+  if (isAdmin) {
+    // Admins can access admin, teacher, and student areas
+    return;
+  }
+
+  // NON-ADMINS: enforce strict role-based access
+  if (isAdminArea(req)) {
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
+
   if (isTeacherArea(req) && !canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseManage)) {
     return NextResponse.redirect(new URL("/unauthorized", req.url));
   }
+
   if (isStudentArea(req) && !canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseView)) {
     return NextResponse.redirect(new URL(homePathForRole(role), req.url));
   }
