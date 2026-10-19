@@ -8,14 +8,13 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/api/webhooks(.*)",
 ]);
-const isUnauthorizedRoute = createRouteMatcher([
-  "/unauthorized(.*)",
-  "/rejected(.*)",
-]);
+const isUnauthorizedRoute = createRouteMatcher(["/unauthorized(.*)", "/rejected(.*)"]);
 const isApiRoute = createRouteMatcher(["/api(.*)", "/trpc(.*)"]);
 const isAdminArea = createRouteMatcher(["/admin(.*)"]);
+const isSuperAdminArea = createRouteMatcher(["/admin/admins(.*)"]);
 const isTeacherArea = createRouteMatcher(["/teacher(.*)"]);
 const isStudentArea = createRouteMatcher(["/student(.*)"]);
+const isParentArea = createRouteMatcher(["/parent(.*)"]);
 
 function denyApi(message: string, status = 403) {
   return NextResponse.json({ error: message }, { status });
@@ -31,15 +30,12 @@ export default clerkMiddleware(async (auth, req) => {
     return redirectToSignIn({ returnBackUrl: req.url });
   }
 
-  const metadata = (sessionClaims?.metadata ?? {}) as {
-    role?: unknown;
-    status?: unknown;
-  };
+  const metadata = (sessionClaims?.metadata ?? {}) as { role?: unknown; status?: unknown };
   const role = isRole(metadata.role) ? metadata.role : null;
   const status = isUserStatus(metadata.status) ? metadata.status : "pending";
 
-  const redirectTo = (path: string) =>
-    NextResponse.redirect(new URL(path, req.url));
+  const redirectTo = (path: string) => NextResponse.redirect(new URL(path, req.url));
+  const path = req.nextUrl.pathname;
 
   // 2. Account status gates
   if (status === "suspended") return redirectTo("/?error=account_suspended");
@@ -48,39 +44,28 @@ export default clerkMiddleware(async (auth, req) => {
     return redirectTo("/rejected");
   }
   if (status !== "active") {
-    // Pending accounts may only use the public routes and /auth/pending.
-    if (isPublicRoute(req) || req.nextUrl.pathname.startsWith("/auth/pending"))
-      return;
+    // Pending accounts may only reach the public routes and their own status page.
+    if (isPublicRoute(req) || path.startsWith("/pending")) return;
     if (isApiRoute(req)) return denyApi("Account is pending approval");
-    return redirectTo("/auth/pending");
+    return redirectTo("/pending");
   }
 
   if (isPublicRoute(req) || isUnauthorizedRoute(req)) return;
 
+  // An active account that reached sign-up can go straight to its home.
+  if (path.startsWith("/pending")) return redirectTo(homePathForRole(role));
   // 3. Coarse area gates. Server code must still re-check every row.
-  if (isAdminArea(req)) {
-    if (role !== "admin") {
-      if (isApiRoute(req)) return denyApi("Forbidden");
-      return redirectTo(homePathForRole(role));
-    }
-    return;
-  }
+  const wrongRole = (allowed: boolean) => {
+    if (allowed) return;
+    if (isApiRoute(req)) return denyApi("Forbidden");
+    return redirectTo(homePathForRole(role));
+  };
 
-  if (isTeacherArea(req)) {
-    if (role !== "teacher") {
-      if (isApiRoute(req)) return denyApi("Forbidden");
-      return redirectTo(homePathForRole(role));
-    }
-    return;
-  }
-
-  if (isStudentArea(req)) {
-    if (role !== "student") {
-      if (isApiRoute(req)) return denyApi("Forbidden");
-      return redirectTo(homePathForRole(role));
-    }
-    return;
-  }
+  if (isSuperAdminArea(req)) return wrongRole(role === "super_admin");
+  if (isAdminArea(req)) return wrongRole(role === "admin" || role === "super_admin");
+  if (isTeacherArea(req)) return wrongRole(role === "teacher");
+  if (isStudentArea(req)) return wrongRole(role === "student");
+  if (isParentArea(req)) return wrongRole(role === "parent");
 });
 
 export const config = {

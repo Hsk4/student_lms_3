@@ -18,7 +18,7 @@ import { glassTheme } from "@/lib/theme/glass";
 
 const navItems = [
     { name: "Dashboard", href: "/admin", icon: LayoutDashboard },
-    { name: "Accounts", href: "/admin/accounts", icon: UserCheck },
+    { name: "Requests", href: "/admin/requests", icon: UserCheck },
     { name: "Courses & Boards", href: "/admin/courses", icon: BookOpen },
     { name: "Users & Faculty", href: "/admin/users", icon: Users },
     { name: "Assignments", href: "/admin/assignments", icon: FileText },

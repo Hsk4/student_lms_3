@@ -160,13 +160,13 @@ Each phase ends with a passing build and a manual check. Update the checkboxes a
 - **Done when:** a signed-in user reaches their dashboard with no org selection, and `grep -rn orgId` returns nothing — **COMPLETE** (only `docs/` prose mentions it; `app/select-org` deleted)
 
 ### Phase 2, Roles, status and the User mirror — COMPLETE
-- [ ] Add `super_admin` and `parent` to roles, permissions and proxy
-- [ ] Add `User` model and `/api/webhooks/clerk` (create, update, delete)
-- [ ] Remove self-assign (Phase 2 delete list); every sign-up becomes `pending`
-- [ ] `scripts/grant-admin.ts` becomes `scripts/seed-super-admin.ts` (keeps the verified-email check)
-- [ ] Admin actions rewritten: `assignRole`, `rejectUser`, `suspendUser`, each with an `AuditLog` write; admins cannot touch `super_admin` or other admins
-- [ ] Replace `approveUser` (currently a no-op) with the real `pending → active` transition
-- **Done when:** a fresh sign-up cannot reach any dashboard until an admin assigns a role, and the audit log shows the change
+- [x] Add `super_admin` and `parent` to roles, permissions and proxy
+- [x] Add `User` model and `/api/webhooks/clerk` (create, update, delete)
+- [x] Remove self-assign (Phase 2 delete list); every sign-up becomes `pending`
+- [x] `scripts/grant-admin.ts` becomes `scripts/seed-super-admin.ts` (keeps the verified-email check)
+- [x] Admin actions rewritten: `assignRole`, `rejectUser`, `suspendUser`, each with an `AuditLog` write; admins cannot touch `super_admin` or other admins
+- [x] Replace `approveUser` (currently a no-op) with the real `pending → active` transition
+- **Done when:** a fresh sign-up cannot reach any dashboard until an admin assigns a role, and the audit log shows the change — **COMPLETE**
 
 ### Phase 3, Catalog and data migration
 - [ ] Models: `Board`, `Level`, `Subject`, `Course` (board+level+subject+medium), `Book`, `Material`

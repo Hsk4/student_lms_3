@@ -180,7 +180,7 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
   // (required by Cache Components).
   await connection();
 
-  await requirePageRole(["admin"]);
+  await requirePageRole(["admin", "super_admin"]);
 
   const now = Date.now();
   const keys14 = dayKeys(14, now);

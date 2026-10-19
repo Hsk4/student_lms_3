@@ -32,7 +32,7 @@ async function NavigationButtons() {
   if (userId && !role) {
     return (
       <div className="flex gap-3">
-        <Link href="/auth/pending">
+        <Link href="/pending">
           <button className={cn(
             "px-6 py-2 rounded-lg text-sm font-semibold transition-all",
             glassTheme.button.primary

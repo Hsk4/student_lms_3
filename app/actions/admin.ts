@@ -5,6 +5,8 @@ import { Enrollment } from "@/app/models/Enrollment";
 import { Assignment } from "@/app/models/Assignment";
 import { MockPaper } from "@/app/models/MockPaper";
 import { Course } from "@/app/models/course";
+import { AuditLog } from "@/app/models/AuditLog";
+import { User } from "@/app/models/User";
 import { revalidatePath } from "next/cache";
 import {
   AuthError,
@@ -13,15 +15,269 @@ import {
   requirePermission,
   requireRole,
 } from "@/lib/auth/guards";
-import { isRole } from "@/lib/auth/roles";
+import {
+  isAssignableRole,
+  isRole,
+  isUserStatus,
+  type AssignableRole,
+  type Role,
+  type UserStatus,
+} from "@/lib/auth/roles";
 
-type ActionResult<T> =
-  | { success: true; data?: T }
-  | { success: false; error: string };
+type ActionResult<T> = { success: true; data?: T } | { success: false; error: string };
+
+type Actor = { userId: string; role: Role };
 
 function toMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
+
+function metadataOf(input: unknown): { role?: unknown; status?: unknown; onboarded?: unknown } {
+  return (input ?? {}) as { role?: unknown; status?: unknown; onboarded?: unknown };
+}
+
+function targetEmail(user: { emailAddresses: { emailAddress: string }[]; id: string }) {
+  return user.emailAddresses?.[0]?.emailAddress ?? user.id;
+}
+
+/** Append-only audit entry. Never throws into the caller's flow. */
+async function writeAudit(input: {
+  actor: Actor;
+  action: string;
+  targetId?: string;
+  targetEmail?: string;
+  metadata?: Record<string, unknown>;
+}) {
+  try {
+    await AuditLog.create({
+      actorId: input.actor.userId,
+      actorRole: input.actor.role,
+      action: input.action,
+      targetId: input.targetId,
+      targetEmail: input.targetEmail,
+      metadata: input.metadata,
+    });
+  } catch (error) {
+    console.error("[audit] failed to write entry", input.action, error);
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  User administration (role / status)                                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Resolves the caller as a `user:manage` holder and loads the target.
+ * Rules: no self-modification; admins cannot touch other admins or super
+ * admins; only a super admin can modify a super admin.
+ */
+async function requireManageableTarget(targetUserId: string) {
+  const ctx = await requirePermission("user:manage", { fresh: true });
+  if (!ctx.role) throw new AuthError("FORBIDDEN", 403);
+
+  if (targetUserId === ctx.userId) {
+    throw new AuthError("You cannot modify your own account", 403);
+  }
+
+  const target = await clerk.users.getUser(targetUserId);
+  const targetMetadata = metadataOf(target.publicMetadata);
+  const targetRole = isRole(targetMetadata.role) ? targetMetadata.role : null;
+
+  const isSuper = ctx.role === "super_admin";
+  if ((targetRole === "admin" || targetRole === "super_admin") && !isSuper) {
+    throw new AuthError("Admin accounts cannot be modified here", 403);
+  }
+  if (targetRole === "super_admin") {
+    throw new AuthError("The super admin account cannot be modified", 403);
+  }
+
+  return { ctx: { ...ctx, role: ctx.role }, target, targetRole, actor: { userId: ctx.userId, role: ctx.role } };
+}
+
+/** Pending → active, and assigns the role in the same write. */
+export async function approveUser(
+  targetUserId: string,
+  role: AssignableRole
+): Promise<ActionResult<null>> {
+  try {
+    if (!isAssignableRole(role)) {
+      throw new AuthError("Invalid role", 403);
+    }
+    const { actor, target, targetRole } = await requireManageableTarget(targetUserId);
+
+    await clerk.users.updateUserMetadata(target.id, {
+      publicMetadata: { role, status: "active" },
+    });
+
+    await connectToDatabase();
+    await User.updateOne(
+      { clerkId: target.id },
+      { $set: { role, status: "active" } },
+      { upsert: true }
+    );
+
+    await writeAudit({
+      actor,
+      action: "user.approve",
+      targetId: target.id,
+      targetEmail: targetEmail(target),
+      metadata: { previousRole: targetRole, role },
+    });
+
+    revalidatePath("/admin/requests");
+    revalidatePath("/admin/accounts");
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    const message = toMessage(error, "Failed to approve user");
+    console.error("approveUser error:", message);
+    return { success: false, error: message };
+  }
+}
+
+/** Alias used by the accounts panel. */
+export async function assignRole(
+  targetUserId: string,
+  role: AssignableRole
+): Promise<ActionResult<AssignableRole>> {
+  const result = await approveUser(targetUserId, role);
+  return result.success ? { success: true, data: role } : result;
+}
+
+/** Rejection is final for now (see objective §7: re-apply after 30 days is TAB). */
+export async function rejectUser(
+  targetUserId: string,
+  reason?: string
+): Promise<ActionResult<null>> {
+  try {
+    const { actor, target, targetRole } = await requireManageableTarget(targetUserId);
+
+    if (!reason?.trim()) {
+      throw new AuthError("A rejection reason is required", 403);
+    }
+
+    await clerk.users.updateUserMetadata(target.id, {
+      publicMetadata: { status: "rejected", rejectedReason: reason.trim() },
+    });
+
+    await connectToDatabase();
+    await User.updateOne(
+      { clerkId: target.id },
+      { $set: { status: "rejected" } },
+      { upsert: true }
+    );
+
+    await writeAudit({
+      actor,
+      action: "user.reject",
+      targetId: target.id,
+      targetEmail: targetEmail(target),
+      metadata: { previousRole: targetRole, reason: reason.trim() },
+    });
+
+    revalidatePath("/admin/requests");
+    revalidatePath("/admin/accounts");
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    const message = toMessage(error, "Failed to reject user");
+    console.error("rejectUser error:", message);
+    return { success: false, error: message };
+  }
+}
+
+export async function suspendUser(
+  targetUserId: string,
+  reason?: string
+): Promise<ActionResult<null>> {
+  return setUserStatus(targetUserId, "suspended", reason);
+}
+
+export async function reactivateUser(targetUserId: string): Promise<ActionResult<null>> {
+  return setUserStatus(targetUserId, "active");
+}
+
+async function setUserStatus(
+  targetUserId: string,
+  status: Extract<UserStatus, "active" | "suspended" | "rejected">,
+  reason?: string
+): Promise<ActionResult<null>> {
+  const action = status === "suspended" ? "user.suspend" : "user.reactivate";
+  try {
+    if (!isUserStatus(status)) throw new AuthError("Invalid status", 403);
+    const { actor, target, targetRole } = await requireManageableTarget(targetUserId);
+
+    await clerk.users.updateUserMetadata(target.id, {
+      publicMetadata: { status },
+    });
+
+    await connectToDatabase();
+    await User.updateOne(
+      { clerkId: target.id },
+      { $set: { status } },
+      { upsert: true }
+    );
+
+    await writeAudit({
+      actor,
+      action,
+      targetId: target.id,
+      targetEmail: targetEmail(target),
+      metadata: { previousRole: targetRole, status, reason: reason?.trim() || undefined },
+    });
+
+    revalidatePath("/admin/requests");
+    revalidatePath("/admin/accounts");
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    const message = toMessage(error, `Failed: ${action}`);
+    console.error(`${action} error:`, message);
+    return { success: false, error: message };
+  }
+}
+
+/** Change an active user's role between the non-admin roles. */
+export async function updateUserRole(
+  targetUserId: string,
+  newRole: AssignableRole
+): Promise<ActionResult<null>> {
+  try {
+    if (!isAssignableRole(newRole)) throw new AuthError("Invalid role", 403);
+    const { actor, target, targetRole } = await requireManageableTarget(targetUserId);
+
+    await clerk.users.updateUserMetadata(target.id, {
+      publicMetadata: { role: newRole },
+    });
+
+    await connectToDatabase();
+    await User.updateOne(
+      { clerkId: target.id },
+      { $set: { role: newRole } },
+      { upsert: true }
+    );
+    await Enrollment.deleteMany({ userId: target.id });
+
+    await writeAudit({
+      actor,
+      action: "user.update_role",
+      targetId: target.id,
+      targetEmail: targetEmail(target),
+      metadata: { previousRole: targetRole, role: newRole },
+    });
+
+    revalidatePath("/admin/users");
+    return { success: true };
+  } catch (error) {
+    const message = toMessage(error, "Failed to update user role");
+    console.error("updateUserRole error:", message);
+    return { success: false, error: message };
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Courses / assignments (existing behaviour, org-free)                       */
+/* -------------------------------------------------------------------------- */
 
 // 1. Assign User (Teacher or Student) to Course
 export async function assignUserToCourse(data: {
@@ -37,12 +293,9 @@ export async function assignUserToCourse(data: {
       throw new AuthError("Target user is banned", 403);
     }
 
-    const targetRole = (target.publicMetadata as { role?: unknown }).role;
+    const targetRole = metadataOf(target.publicMetadata).role;
     if (!isRole(targetRole) || targetRole !== data.role) {
-      throw new AuthError(
-        "User role does not match requested course role",
-        403,
-      );
+      throw new AuthError("User role does not match requested course role", 403);
     }
 
     await connectToDatabase();
@@ -53,7 +306,7 @@ export async function assignUserToCourse(data: {
     const enrollment = await Enrollment.findOneAndUpdate(
       { userId: data.userId, courseId: data.courseId },
       { ...data, assignedBy: userId, status: "approved" },
-      { upsert: true, new: true },
+      { upsert: true, new: true }
     );
 
     revalidatePath("/admin/users");
@@ -77,7 +330,7 @@ export async function createAssignment(data: {
   starterSnippetId?: string;
 }): Promise<ActionResult<string>> {
   try {
-    const { userId } = await requireRole(["admin", "teacher"], { fresh: true });
+    const { userId } = await requireRole(["admin", "super_admin", "teacher"], { fresh: true });
 
     await connectToDatabase();
     await requireCourseAccess(data.courseId, "manage");
@@ -107,9 +360,7 @@ export async function createMockPaper(data: {
   solutionsUrl?: string;
 }): Promise<ActionResult<string>> {
   try {
-    const { userId } = await requirePermission("course:manage", {
-      fresh: true,
-    });
+    const { userId } = await requirePermission("course:manage", { fresh: true });
 
     await connectToDatabase();
     const mock = await MockPaper.create({
@@ -125,119 +376,32 @@ export async function createMockPaper(data: {
   }
 }
 
-// Shared checks for admin actions that modify another user.
-async function requireManageableTarget(targetUserId: string) {
-  const ctx = await requirePermission("user:manage", { fresh: true });
+/* -------------------------------------------------------------------------- */
+/*  Backwards-compatible exports for the accounts panel                        */
+/* -------------------------------------------------------------------------- */
 
-  if (targetUserId === ctx.userId) {
-    throw new AuthError("You cannot modify your own account", 403);
-  }
+/** @deprecated use {@link assignRole} */
+export const assignRoleToUser = assignRole;
 
-  const target = await clerk.users.getUser(targetUserId);
-  const targetRole = (target.publicMetadata as { role?: unknown }).role;
-
-  if (isRole(targetRole) && targetRole === "admin") {
-    throw new AuthError("Admin accounts cannot be modified here", 403);
-  }
-
-  return { ctx, target };
-}
-
-// 4. Assign Role to Pending User (from accounts panel)
-export async function assignRoleToUser(
-  targetUserId: string,
-  role: "student" | "teacher",
-): Promise<ActionResult<string>> {
-  try {
-    const { target } = await requireManageableTarget(targetUserId);
-
-    await clerk.users.updateUserMetadata(target.id, {
-      publicMetadata: {
-        role,
-        status: "active",
-      },
-    });
-
-    revalidatePath("/admin/accounts");
-    return { success: true, data: role };
-  } catch (error) {
-    const message = toMessage(error, "Failed to assign role");
-    console.error("assignRoleToUser error:", message);
-    return { success: false, error: message };
-  }
-}
-
-// 5. Approve User (mark as active from pending)
-export async function approveUser(
-  targetUserId: string,
-): Promise<ActionResult<null>> {
-  try {
-    const { target } = await requireManageableTarget(targetUserId);
-
-    await clerk.users.updateUserMetadata(target.id, {
-      publicMetadata: { status: "active" },
-    });
-
-    if (target.banned) {
-      await clerk.users.unbanUser(target.id);
-    }
-
-    revalidatePath("/admin/users");
-    return { success: true };
-  } catch (error) {
-    const message = toMessage(error, "Failed to approve user");
-    console.error("approveUser error:", message);
-    return { success: false, error: message };
-  }
-}
-
-// 6. Toggle User Activation Status
+/** @deprecated use {@link suspendUser} / {@link reactivateUser} */
 export async function toggleUserStatus(
-  targetUserId: string,
-): Promise<ActionResult<string>> {
+  targetUserId: string
+): Promise<ActionResult<UserStatus>> {
   try {
-    const { target } = await requireManageableTarget(targetUserId);
+    const target = await clerk.users.getUser(targetUserId);
+    const current = isUserStatus(metadataOf(target.publicMetadata).status)
+      ? (metadataOf(target.publicMetadata).status as UserStatus)
+      : "pending";
 
-    if (target.banned) {
-      await clerk.users.unbanUser(target.id);
-    } else {
-      await clerk.users.banUser(target.id);
-    }
+    const result = current === "active"
+      ? await suspendUser(targetUserId)
+      : await reactivateUser(targetUserId);
 
-    const newStatus = target.banned ? "active" : "suspended";
-    await clerk.users.updateUserMetadata(target.id, {
-      publicMetadata: { status: newStatus },
-    });
-
-    revalidatePath("/admin/users");
-    return { success: true, data: newStatus };
+    return result.success
+      ? { success: true, data: current === "active" ? "suspended" : "active" }
+      : result;
   } catch (error) {
     const message = toMessage(error, "Failed to toggle user status");
-    console.error("toggleUserStatus error:", message);
-    return { success: false, error: message };
-  }
-}
-
-// 7. Change User Role (teacher <-> student only; admins are granted out-of-band)
-export async function updateUserRole(
-  targetUserId: string,
-  newRole: "teacher" | "student"
-): Promise<ActionResult<null>> {
-  try {
-    const { target } = await requireManageableTarget(targetUserId);
-
-    await clerk.users.updateUserMetadata(target.id, {
-      publicMetadata: { role: newRole },
-    });
-
-    await connectToDatabase();
-    await Enrollment.deleteMany({ userId: target.id });
-
-    revalidatePath("/admin/users");
-    return { success: true };
-  } catch (error) {
-    const message = toMessage(error, "Failed to update user role");
-    console.error("updateUserRole error:", message);
     return { success: false, error: message };
   }
 }

@@ -26,8 +26,8 @@ export default function SignUpPage() {
           routing="path" 
           path="/sign-up" 
           signInUrl="/sign-in"
-          forceRedirectUrl="/auth/pending"
-          signInForceRedirectUrl="/auth/pending"
+          forceRedirectUrl="/pending"
+          signInForceRedirectUrl="/auth/complete"
         />
       </Suspense>
     </div>

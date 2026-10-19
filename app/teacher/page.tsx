@@ -14,7 +14,7 @@ export const instant = false;
 export default async function TeacherPage() {
   const { role, userId } = await requirePageRole(["teacher", "admin"]);
 
-  if (role === "admin") {
+  if (role === "admin" || role === "super_admin") {
     return (
       <div className="space-y-6">
         <GlassPageHeader

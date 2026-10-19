@@ -35,11 +35,15 @@ export default function AuthCompletePage() {
         (async () => {
             try {
                 const existing = user.publicMetadata?.role;
+                const metadata = (user.publicMetadata ?? {}) as { status?: unknown };
                 const role: Role | null = isRole(existing) ? existing : null;
-
-                if (!role) {
-                    // User has no role yet, send to pending page
-                    router.replace("/auth/pending");
+                if (metadata.status === "rejected") {
+                    router.replace("/rejected");
+                    return;
+                }
+                if (!role || metadata.status !== "active") {
+                    // No role yet (or not approved yet): wait on the pending page.
+                    router.replace("/pending");
                     return;
                 }
 

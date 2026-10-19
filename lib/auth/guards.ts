@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { connectToDatabase } from "@/lib/db";
 import { Course } from "@/app/models/course";
 import { Enrollment } from "@/app/models/Enrollment";
+import { User } from "@/app/models/User";
 import {
   canRoleAccessPermission,
   isRole,
@@ -93,6 +94,58 @@ export async function requireUser(
   return ctx;
 }
 
+/**
+ * Admin-tier gate for API routes: throws instead of redirecting. `"admin:manage"`
+ * is granted to `super_admin` only, so it restricts the caller to that tier.
+ */
+export async function requireAdminPermission(
+  permission: Permission,
+  opts: GuardOptions = { fresh: true },
+): Promise<AuthContext> {
+  return requirePermission(permission, opts);
+}
+
+/**
+ * Row-level: the teacher must have an approved enrollment for this student's
+ * course. Returns the matching enrollment ids.
+ */
+export async function requireTeacherOf(studentId: string) {
+  const ctx = await requireRole(["teacher"]);
+  await connectToDatabase();
+
+  const teacherCourses = await Enrollment.distinct("courseId", {
+    userId: ctx.userId,
+    role: "teacher",
+    status: "approved",
+  });
+
+  const enrollment = await Enrollment.findOne({
+    userId: studentId,
+    role: "student",
+    status: "approved",
+    courseId: { $in: teacherCourses },
+  }).lean();
+
+  if (!enrollment) throw new AuthError("FORBIDDEN", 403);
+  return { ...ctx, enrollment };
+}
+
+/**
+ * Row-level: the signed-in parent must have this student in their children.
+ * `childrenIds` is populated by the parent-invite flow in Phase 4.
+ */
+export async function requireParentOf(studentId: string) {
+  const ctx = await requireRole(["parent"]);
+  await connectToDatabase();
+
+  const parent = await User.findOne({ clerkId: ctx.userId }).lean();
+
+  if (!parent || !parent.childrenIds?.includes(studentId)) {
+    throw new AuthError("FORBIDDEN", 403);
+  }
+  return { ...ctx, parent };
+}
+
 export async function requirePermission(
   permission: Permission,
   opts: GuardOptions = {},
@@ -117,14 +170,14 @@ export async function requireRole(
 
 function redirectForAuthError(error: AuthError): never {
   if (error.status === 401) redirect("/sign-in");
-  if (error.message === "ACCOUNT_NOT_ACTIVE") redirect("/auth/pending");
+  if (error.message === "ACCOUNT_NOT_ACTIVE") redirect("/pending");
   redirect("/unauthorized");
 }
 
 function redirectWithStatus(message: string): never {
   if (message === "rejected") redirect("/rejected");
   if (message === "suspended") redirect("/?error=account_suspended");
-  redirect("/auth/pending");
+  redirect("/pending");
 }
 
 export async function requirePageRole(
@@ -181,7 +234,7 @@ export async function requireCourseAccess(
   const course = await Course.findOne({ _id: courseId }).lean();
   if (!course) throw new AuthError("NOT_FOUND", 404);
 
-  if (ctx.role === "admin") return { ...ctx, course };
+  if (ctx.role === "admin" || ctx.role === "super_admin") return { ...ctx, course };
 
   const teacherAssignment = await Enrollment.exists({
     userId: ctx.userId,

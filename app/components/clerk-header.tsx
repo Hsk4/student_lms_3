@@ -27,7 +27,7 @@ export function ClerkComponents({
           <h1 className={cn("font-bold text-lg", glassTheme.text.primary)}>Student LMS</h1>
         </Link>
         {userId && status === "pending" && (
-          <Link href="/auth/pending" className="text-sm font-medium text-amber-400">
+          <Link href="/pending" className="text-sm font-medium text-amber-400">
             Pending approval
           </Link>
         )}
