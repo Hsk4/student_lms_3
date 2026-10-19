@@ -2,6 +2,64 @@ import Link from "next/link";
 import { GraduationCap, BookOpen, Users, BarChart3, ShieldCheck, Zap, ArrowRight, CheckCircle2 } from "lucide-react";
 import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";
+import { Suspense } from "react";
+import { auth } from "@clerk/nextjs/server";
+import { appRoleFromClerkRole, isClerkOrgRole } from "@/lib/auth/roles";
+
+async function NavigationButtons() {
+  const { userId, orgRole } = await auth();
+  const normalizedRole = isClerkOrgRole(orgRole) ? orgRole : null;
+  const role = appRoleFromClerkRole(normalizedRole);
+
+  // If signed in, show dashboard link
+  if (userId && role) {
+    const dashboardLink = role === 'admin' ? '/admin' : role === 'teacher' ? '/teacher' : '/student';
+    return (
+      <div className="flex gap-3">
+        <Link href={dashboardLink}>
+          <button className={cn(
+            "px-6 py-2 rounded-lg text-sm font-semibold transition-all",
+            glassTheme.button.primary
+          )}>
+            Go to Dashboard
+          </button>
+        </Link>
+      </div>
+    );
+  }
+
+  // If pending, show pending page
+  if (userId && !role) {
+    return (
+      <div className="flex gap-3">
+        <Link href="/auth/pending">
+          <button className={cn(
+            "px-6 py-2 rounded-lg text-sm font-semibold transition-all",
+            glassTheme.button.primary
+          )}>
+            Complete Setup
+          </button>
+        </Link>
+      </div>
+    );
+  }
+
+  // If not signed in, show sign-in/sign-up
+  return (
+    <div className="flex gap-3">
+      <Link href="/sign-in">
+        <button className={cn("px-4 py-2 rounded-lg text-sm font-medium transition-all", glassTheme.text.secondary, "hover:text-white")}>
+          Sign In
+        </button>
+      </Link>
+      <Link href="/sign-up">
+        <button className="px-6 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all">
+          Get Started
+        </button>
+      </Link>
+    </div>
+  );
+}
 
 export default function Home() {
   return (
@@ -23,18 +81,22 @@ export default function Home() {
             <span className={cn("font-bold text-lg hidden sm:inline", glassTheme.text.primary)}>Fastly LMS</span>
           </Link>
 
-          <div className="flex gap-3">
-            <Link href="/sign-in">
-              <button className={cn("px-4 py-2 rounded-lg text-sm font-medium transition-all", glassTheme.text.secondary, "hover:text-white")}>
-                Sign In
-              </button>
-            </Link>
-            <Link href="/sign-up">
-              <button className="px-6 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all">
-                Get Started
-              </button>
-            </Link>
-          </div>
+          <Suspense fallback={
+            <div className="flex gap-3">
+              <Link href="/sign-in">
+                <button className={cn("px-4 py-2 rounded-lg text-sm font-medium transition-all", glassTheme.text.secondary, "hover:text-white")}>
+                  Sign In
+                </button>
+              </Link>
+              <Link href="/sign-up">
+                <button className="px-6 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all">
+                  Get Started
+                </button>
+              </Link>
+            </div>
+          }>
+            <NavigationButtons />
+          </Suspense>
         </div>
       </nav>
 

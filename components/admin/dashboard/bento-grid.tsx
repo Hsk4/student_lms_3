@@ -20,7 +20,7 @@ import {
 } from "@dnd-kit/sortable";
 import { GripVertical, RotateCcw } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/Button";
 import type { DashboardData } from "@/lib/admin-dashboard";
 import { BentoShell, SortableBento } from "./bento-card";
 import { DEFAULT_ORDER, type WidgetId } from "./layout-config";

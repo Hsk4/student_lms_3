@@ -14,7 +14,6 @@ export const instant = false;
 export default async function TeacherPage() {
   const { role, userId, orgId } = await requirePageRole(["teacher", "admin"], { requireOrg: true });
 
-  // If admin, show message they should use /admin
   if (role === "admin") {
     return (
       <div className="space-y-6">
@@ -29,7 +28,7 @@ export default async function TeacherPage() {
             You are an Admin. Access the Admin Panel for full controls.
           </p>
           <Link href="/admin">
-            <button className={glassTheme.button.primary + " px-6 py-2 rounded-lg font-semibold"}>
+            <button className={cn(glassTheme.button.primary, "px-6 py-2 rounded-lg font-semibold")}>
               Go to Admin Panel
             </button>
           </Link>
@@ -38,7 +37,6 @@ export default async function TeacherPage() {
     );
   }
 
-  // Load teacher's courses from MongoDB
   let courses = [];
   let studentCount = 0;
   let pendingReviews = 0;
@@ -46,7 +44,6 @@ export default async function TeacherPage() {
   try {
     await connectToDatabase();
     
-    // Get all courses this teacher is assigned to
     const enrollments = await Enrollment.find({
       userId,
       orgId,
@@ -56,7 +53,6 @@ export default async function TeacherPage() {
 
     courses = enrollments.map((e: any) => e.courseId).filter(Boolean);
 
-    // Get total students across teacher's courses
     const courseIds = courses.map((c: any) => c._id);
     if (courseIds.length > 0) {
       const studentEnrollments = await Enrollment.countDocuments({
@@ -65,7 +61,6 @@ export default async function TeacherPage() {
         status: "approved",
       });
       studentCount = studentEnrollments;
-      // TODO: Calculate pending reviews once submissions model is populated
       pendingReviews = 0;
     }
   } catch (error) {
@@ -97,7 +92,7 @@ export default async function TeacherPage() {
 
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className={cn(glassTheme.bg.tealCard, "lg:col-span-2 rounded-xl p-6")}>
+        <div className={cn(glassTheme.bg.tealCard, glassTheme.hover.tealCard, "lg:col-span-2 rounded-xl p-6")}>
           <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary, "mb-4 flex items-center gap-2")}>
             <BookOpen className="w-5 h-5 text-teal-400" />
             My Courses
@@ -110,13 +105,13 @@ export default async function TeacherPage() {
           ) : (
             <div className="space-y-3">
               {courses.map((course: any) => (
-                <div key={course._id} className={cn("p-4 rounded-lg border transition-all", "bg-teal-900/20 border-teal-500/30 hover:bg-teal-900/30 hover:border-teal-400/40")}>
+                <div key={course._id} className={cn("p-4 rounded-lg border transition-all", glassTheme.bg.teal, glassTheme.hover.teal)}>
                   <div className="flex items-center justify-between mb-2">
                     <p className={glassTheme.text.primary}>{course.levelOrGrade} - {course.board}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {course.subjects?.map((subject: string) => (
-                      <span key={subject} className="text-xs px-2 py-1 rounded-lg bg-teal-500/20 border border-teal-400/20 text-teal-300">
+                      <span key={subject} className={cn("text-xs px-2 py-1 rounded-lg", "bg-teal-500/20 border border-teal-400/20 text-teal-300")}>
                         {subject}
                       </span>
                     ))}
@@ -127,19 +122,19 @@ export default async function TeacherPage() {
           )}
         </div>
 
-        <div className={cn(glassTheme.bg.tealCard, "rounded-xl p-6")}>
+        <div className={cn(glassTheme.bg.tealCard, glassTheme.hover.tealCard, "rounded-xl p-6")}>
           <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary, "mb-4 flex items-center gap-2")}>
             <BarChart3 className="w-5 h-5 text-teal-400" />
             Quick Actions
           </h3>
           <div className="space-y-2">
-            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", "bg-teal-900/30 border border-teal-500/30 hover:bg-teal-900/40 hover:border-teal-400/40 text-teal-300")}>
+            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", glassTheme.bg.teal, glassTheme.hover.teal, glassTheme.text.accent)}>
               Create Assignment
             </button>
-            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", "bg-teal-900/30 border border-teal-500/30 hover:bg-teal-900/40 hover:border-teal-400/40 text-teal-300")}>
+            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", glassTheme.bg.teal, glassTheme.hover.teal, glassTheme.text.accent)}>
               Grade Submissions
             </button>
-            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", "bg-teal-900/30 border border-teal-500/30 hover:bg-teal-900/40 hover:border-teal-400/40 text-teal-300")}>
+            <button className={cn("w-full px-4 py-2 rounded-lg transition-all text-sm font-medium", glassTheme.bg.teal, glassTheme.hover.teal, glassTheme.text.accent)}>
               View Analytics
             </button>
           </div>
@@ -147,7 +142,7 @@ export default async function TeacherPage() {
       </div>
 
       {/* Class Performance */}
-      <div className={cn(glassTheme.bg.tealCard, "rounded-xl p-6")}>
+      <div className={cn(glassTheme.bg.tealCard, glassTheme.hover.tealCard, "rounded-xl p-6")}>
         <h3 className={cn(glassTheme.typography.h4, glassTheme.text.primary, "mb-4 flex items-center gap-2")}>
           <BarChart3 className="w-5 h-5 text-teal-400" />
           Class Performance

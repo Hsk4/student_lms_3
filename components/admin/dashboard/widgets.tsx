@@ -21,8 +21,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/Badge";
+import { Progress } from "@/components/ui/Progress";
 import { cn } from "@/lib/utils";
 import type { ActivityKind, DashboardData } from "@/lib/admin-dashboard";
 import { AreaChart, Sparkline } from "./charts";
@@ -103,7 +103,7 @@ function StatBody({
         {deltaLabel}
       </p>
       {/* Sparkline bleeds to the card edges */}
-      <div className="mt-auto -mx-(--card-spacing) -mb-(--card-spacing) pt-5">
+      <div className="mt-auto -mx-[--card-spacing] -mb-[--card-spacing] pt-5">
         <Sparkline data={trend} className={t.spark} />
       </div>
     </div>

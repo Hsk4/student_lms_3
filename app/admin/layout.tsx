@@ -1,7 +1,7 @@
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminUserButton } from "@/app/components/admin-user-button";
 import { Search, Bell, Plus, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/Button";
 import Link from "next/link";
 import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";

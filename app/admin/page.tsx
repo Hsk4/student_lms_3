@@ -37,7 +37,7 @@ async function DashboardContent() {
         )}>
           <Building2 className="w-8 h-8 text-teal-400" />
         </div>
-        <h2 className={cn(glassTheme.typography.h3, glassTheme.text.primary, "mb-2")}>
+        <h2 className={cn(glassTheme.typography?.h3 || "text-xl", glassTheme.text.primary, "mb-2")}>
           No organization selected
         </h2>
         <p className={cn("text-base", glassTheme.text.secondary)}>
@@ -53,7 +53,7 @@ async function DashboardContent() {
         <div className={cn(
           "flex items-start gap-4 rounded-xl px-6 py-4 text-sm",
           "backdrop-blur-xl border border-amber-400/30 bg-gradient-to-br from-amber-500/15 to-amber-600/10",
-          glassTheme.shadow.md
+          glassTheme.shadow?.md || "shadow-md"
         )}>
           <TriangleAlert className="w-5 h-5 text-amber-300 mt-0.5 flex-shrink-0" />
           <div>

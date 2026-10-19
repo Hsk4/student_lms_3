@@ -8,9 +8,6 @@ import type { Model } from "mongoose";
 import { connectToDatabase } from "@/lib/db";
 import { Course } from "@/app/models/course";
 import { Enrollment } from "@/app/models/Enrollment";
-import { Assignment } from "@/app/models/Assignment";
-import { MockPaper } from "@/app/models/MockPaper";
-import { Submission } from "@/app/models/Submission";
 
 /* -------------------------------------------------------------------------- */
 /*  Types (plain, serialisable — these cross the server → client boundary)     */
@@ -217,30 +214,21 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
     try {
       await connectToDatabase();
 
-      const [courses, assignments] = await Promise.all([
+      const [courses] = await Promise.all([
         Course.find({ orgId })
           .select("board levelOrGrade subjects createdAt")
-          .sort({ createdAt: -1 })
-          .lean(),
-        Assignment.find({ orgId })
-          .select("title createdAt")
           .sort({ createdAt: -1 })
           .lean(),
       ]);
 
       const courseIds = courses.map((c) => c._id);
-      const assignmentIds = assignments.map((a) => a._id);
       const inCourses = { courseId: { $in: courseIds } };
-      const inAssignments = { assignmentId: { $in: assignmentIds } };
 
       const courseTitle = new Map(
         courses.map((c) => [
           c._id.toString(),
           `${c.levelOrGrade} · ${c.board}`,
         ]),
-      );
-      const assignmentTitle = new Map(
-        assignments.map((a) => [a._id.toString(), a.title]),
       );
 
       const [
@@ -251,15 +239,6 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
         perCourseRoles,
         enrollmentDaily,
         courseDaily,
-        mockDaily,
-        mockTotal,
-        pendingTotal,
-        gradedThisWeek,
-        submittedDaily,
-        gradedDaily,
-        recentSubmissions,
-        recentEnrollments,
-        recentMocks,
       ] = await Promise.all([
         Enrollment.countDocuments({ ...inCourses, status: "approved" }),
         Enrollment.countDocuments({ ...inCourses, status: "pending" }),
@@ -292,28 +271,6 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
           keys56,
         ),
         dailyCounts(Course, { orgId }, "createdAt", keys56),
-        dailyCounts(MockPaper, { orgId }, "createdAt", keys56),
-        MockPaper.countDocuments({ orgId }),
-        Submission.countDocuments({ ...inAssignments, status: "submitted" }),
-        Submission.countDocuments({
-          ...inAssignments,
-          status: "graded",
-          updatedAt: { $gte: weekAgo },
-        }),
-        dailyCounts(Submission, inAssignments, "createdAt", keys14),
-        dailyCounts(
-          Submission,
-          { ...inAssignments, status: "graded" },
-          "updatedAt",
-          keys14,
-        ),
-        Submission.find(inAssignments).sort({ createdAt: -1 }).limit(5).lean(),
-        Enrollment.find(inCourses).sort({ createdAt: -1 }).limit(4).lean(),
-        MockPaper.find({ orgId })
-          .select("title subject createdAt")
-          .sort({ createdAt: -1 })
-          .limit(3)
-          .lean(),
       ]);
 
       /* Stat cards */
@@ -328,27 +285,27 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
         trend: weekly(courseDaily),
       };
       data.stats.pending = {
-        total: pendingTotal,
-        gradedThisWeek,
-        trend: submittedDaily,
+        total: 0,
+        gradedThisWeek: 0,
+        trend: Array(14).fill(0),
       };
       data.stats.mockPapers = {
-        total: mockTotal,
-        delta: sum(mockDaily.slice(-30)),
-        trend: weekly(mockDaily),
+        total: 0,
+        delta: 0,
+        trend: Array(8).fill(0),
       };
 
       /* People */
       data.people.students = studentIds.length;
       data.people.teachers = teacherIds.length;
       data.people.pendingApprovals = pendingApprovals;
-      data.people.assignments = assignments.length;
+      data.people.assignments = 0;
 
       /* Chart */
       data.submissionSeries = {
         labels: keys14.map(chartLabel),
-        submitted: submittedDaily,
-        graded: gradedDaily,
+        submitted: Array(14).fill(0),
+        graded: Array(14).fill(0),
       };
 
       /* Per-course roll-up → boards + top courses */
@@ -388,29 +345,6 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
 
       /* Activity feed: merge a few sources, newest first */
       const feed: (DashboardData["activity"][number] & { at: number })[] = [
-        ...recentSubmissions.map((s) => ({
-          id: `sub-${s._id}`,
-          kind: "submission" as const,
-          title:
-            s.status === "graded"
-              ? "Submission graded"
-              : s.status === "resubmit_required"
-                ? "Resubmission requested"
-                : "New submission",
-          detail: assignmentTitle.get(String(s.assignmentId)) ?? "Assignment",
-          at: s.createdAt.getTime(),
-          ago: ago(s.createdAt, now),
-        })),
-        ...recentEnrollments.map((e) => ({
-          id: `enr-${e._id}`,
-          kind: "enrollment" as const,
-          title: `${e.role === "teacher" ? "Teacher" : "Student"} ${
-            e.status === "pending" ? "requested access" : "assigned"
-          }`,
-          detail: courseTitle.get(String(e.courseId)) ?? "Course",
-          at: e.createdAt.getTime(),
-          ago: ago(e.createdAt, now),
-        })),
         ...courses.slice(0, 3).map((c) => ({
           id: `crs-${c._id}`,
           kind: "course" as const,
@@ -418,22 +352,6 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
           detail: `${c.levelOrGrade} · ${c.board}`,
           at: c.createdAt.getTime(),
           ago: ago(c.createdAt, now),
-        })),
-        ...recentMocks.map((m) => ({
-          id: `mock-${m._id}`,
-          kind: "mock" as const,
-          title: "Mock paper published",
-          detail: m.title,
-          at: m.createdAt.getTime(),
-          ago: ago(m.createdAt, now),
-        })),
-        ...assignments.slice(0, 3).map((a) => ({
-          id: `asg-${a._id}`,
-          kind: "assignment" as const,
-          title: "Assignment created",
-          detail: a.title,
-          at: a.createdAt.getTime(),
-          ago: ago(a.createdAt, now),
         })),
       ];
       data.activity = feed

@@ -12,8 +12,8 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button";
+} from "@/components/ui/Card";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import type { DashboardData } from "@/lib/admin-dashboard";
 import { WIDGET_LAYOUT, type WidgetId } from "./layout-config";
@@ -86,14 +86,13 @@ export function BentoShell({
         )}
         {handleProps && (
           <CardAction>
-            <button
+            <Button
               type="button"
               aria-label={`Move ${layout.title}`}
               title="Drag to rearrange"
               {...handleProps}
               className={cn(
-                buttonVariants({ variant: "ghost", size: "icon-xs" }),
-                "cursor-grab touch-none backdrop-blur-md transition-all rounded-lg",
+                "size-8 p-0 cursor-grab touch-none backdrop-blur-md transition-all rounded-lg",
                 "opacity-0 group-hover/bento:opacity-100 focus-visible:opacity-100 active:cursor-grabbing",
                 "[@media(hover:none)]:opacity-100",
                 dark
@@ -102,7 +101,7 @@ export function BentoShell({
               )}
             >
               <GripVertical className="size-4" />
-            </button>
+            </Button>
           </CardAction>
         )}
       </CardHeader>

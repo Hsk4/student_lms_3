@@ -5,7 +5,6 @@ import { GlassCard } from "@/components/glass/glass-card";
 import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";
 import { Settings, Bell, Lock, Users, FileText, Database } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 export default async function AdminSettingsPage() {
   await requirePagePermission(ORG_PERMISSIONS.memberManage, { fresh: true, requireOrg: true });
@@ -61,10 +60,16 @@ export default async function AdminSettingsPage() {
 
             {/* Save Button */}
             <div className="flex gap-3 pt-4">
-              <button className={glassTheme.button.primary + " px-6 py-2 rounded-lg font-semibold text-sm"}>
+              <button className={cn(
+                glassTheme.button.primary,
+                "px-6 py-2 rounded-lg font-semibold text-sm"
+              )}>
                 Save Changes
               </button>
-              <button className={glassTheme.button.glass + " px-6 py-2 rounded-lg font-semibold text-sm"}>
+              <button className={cn(
+                glassTheme.button.glass,
+                "px-6 py-2 rounded-lg font-semibold text-sm"
+              )}>
                 Cancel
               </button>
             </div>
@@ -79,8 +84,8 @@ export default async function AdminSettingsPage() {
             { icon: Users, label: "Members", desc: "Invites & roles" },
             { icon: Database, label: "Data", desc: "Backups & exports" },
           ].map((item, i) => (
-            <GlassCard key={i} variant="default" interactive hover="interactive">
-              <div className="flex items-start gap-3">
+            <GlassCard key={i} variant="default">
+              <div className="flex items-start gap-3 cursor-pointer">
                 <item.icon className="w-5 h-5 text-emerald-300 mt-1" />
                 <div className="flex-1">
                   <h4 className={cn("font-semibold text-sm", glassTheme.text.primary)}>{item.label}</h4>

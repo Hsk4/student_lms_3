@@ -20,7 +20,7 @@ import {
   type SortingStrategy,
 } from "@dnd-kit/sortable";
 import { GripVertical, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/utils";
 import { glassTheme } from "@/lib/theme/glass";
 
