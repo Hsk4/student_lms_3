@@ -5,13 +5,12 @@ import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
 import { requirePagePermission } from "@/lib/auth/guards";
-import { ORG_PERMISSIONS } from "@/lib/auth/roles";
 import { Suspense } from "react";
 import { DeleteCourseButton } from "./delete-course-button";
 import { CoursesList } from "./courses-list";
 
 export default async function AdminCoursesPage() {
-  const ctx = await requirePagePermission(ORG_PERMISSIONS.courseManage, { fresh: true, requireOrg: true });
+  await requirePagePermission("course:manage", { fresh: true });
 
   return (
     <div className="space-y-6">
@@ -41,7 +40,7 @@ export default async function AdminCoursesPage() {
           </div>
         </GlassCard>
       }>
-        <CoursesList orgId={ctx.orgId!} />
+        <CoursesList />
       </Suspense>
     </div>
   );

@@ -7,7 +7,7 @@ import { Trophy } from "lucide-react";
 export const instant = false;
 
 export default async function StudentResultsPage() {
-  await requirePageRole(["student"], { requireOrg: true });
+  await requirePageRole(["student"]);
 
   return (
     <div className="space-y-6">

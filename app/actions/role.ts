@@ -1,22 +1,33 @@
 "use server";
 
 import { auth } from "@clerk/nextjs/server";
-import { addToSchoolOrg, clerk, SCHOOL_ORG_ID } from "@/lib/auth/guards";
-import { isRole, isSelfAssignableRole, toClerkOrgRole, type Role } from "@/lib/auth/roles";
+import { clerk } from "@/lib/auth/guards";
+import { isRole, type Role } from "@/lib/auth/roles";
 
-const teachersNeedApproval = () => process.env.TEACHER_AUTO_APPROVE !== "true";
+const SELF_ASSIGNABLE_ROLES = ["teacher", "student"] as const;
+type SelfAssignableRole = (typeof SELF_ASSIGNABLE_ROLES)[number];
+
+function isSelfAssignableRole(value: unknown): value is SelfAssignableRole {
+  return (
+    typeof value === "string" &&
+    (SELF_ASSIGNABLE_ROLES as readonly string[]).includes(value)
+  );
+}
 
 type RoleResult = { role: Role | null; error?: string };
 
 /**
  * Assigns the user's role exactly ONCE and only to a non-privileged role.
  * - The role is written to publicMetadata (server-only writable).
- * - If a role already exists it is returned untouched (no self-promotion,
- *   no switching teacher <-> student by editing unsafeMetadata later).
- * - The user joins the school org BEFORE the role is written, so a failure
- *   leaves them role-less and the flow simply retries.
+ * - If a role already exists it is returned untouched (no self-promotion).
+ *
+ * NOTE: Phase 2 replaces this flow with admin approval; until then it keeps the
+ * existing single-school behaviour without any Clerk Organization plumbing.
  */
-async function assignInitialRole(userId: string, requested: unknown): Promise<Role | null> {
+async function assignInitialRole(
+  userId: string,
+  requested: unknown,
+): Promise<Role | null> {
   try {
     const user = await clerk.users.getUser(userId);
 
@@ -25,19 +36,8 @@ async function assignInitialRole(userId: string, requested: unknown): Promise<Ro
 
     if (!isSelfAssignableRole(requested)) return null;
 
-    await addToSchoolOrg(userId, requested);
-
-    const status = requested === "teacher" && teachersNeedApproval() ? "pending" : "active";
-    const membershipRole = requested === "teacher" && teachersNeedApproval() ? "org:student" : toClerkOrgRole(requested);
-
     await clerk.users.updateUserMetadata(userId, {
-      publicMetadata: { role: requested, status },
-    });
-
-    await clerk.organizations.updateOrganizationMembership({
-      organizationId: SCHOOL_ORG_ID!,
-      userId,
-      role: membershipRole,
+      publicMetadata: { role: requested, status: "active" },
     });
 
     return requested;
@@ -60,7 +60,8 @@ export async function syncRoleFromSignup(): Promise<RoleResult> {
     const role = await assignInitialRole(userId, requested);
     return { role };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to sync role";
+    const message =
+      error instanceof Error ? error.message : "Failed to sync role";
     console.error("syncRoleFromSignup error:", message);
     return { role: null, error: message };
   }
@@ -74,8 +75,7 @@ export async function setUserRole(role: unknown): Promise<RoleResult> {
       return { role: null, error: "Unauthorized" };
     }
 
-    if (!isSelfAssignableRole(role)) {
-      return { role: null, error: "Invalid role" };
+    if (!isSelfAssignableRole(role)) {      return { role: null, error: "Invalid role" };
     }
 
     const assigned = await assignInitialRole(userId, role);
@@ -84,7 +84,8 @@ export async function setUserRole(role: unknown): Promise<RoleResult> {
     }
     return { role: assigned };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to set role";
+    const message =
+      error instanceof Error ? error.message : "Failed to set role";
     console.error("setUserRole error:", message);
     return { role: null, error: message };
   }

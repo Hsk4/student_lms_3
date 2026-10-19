@@ -7,13 +7,13 @@ import { connectToDatabase } from "@/lib/db";
 import { Course } from "@/app/models/course";
 import { DeleteCourseButton } from "./delete-course-button";
 
-export async function CoursesList({ orgId }: { orgId: string }) {
+export async function CoursesList() {
   let courses = [];
   let error = null;
 
   try {
     await connectToDatabase();
-    const courseDocs = await Course.find({ orgId }).sort({ createdAt: -1 }).lean();
+    const courseDocs = await Course.find({}).sort({ createdAt: -1 }).lean();
     courses = JSON.parse(JSON.stringify(courseDocs));
   } catch (err) {
     console.error("Error fetching courses:", err);

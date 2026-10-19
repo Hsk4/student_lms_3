@@ -1,5 +1,4 @@
 import { requirePagePermission } from "@/lib/auth/guards";
-import { ORG_PERMISSIONS } from "@/lib/auth/roles";
 import { GlassPageHeader } from "@/components/glass/glass-page-header";
 import { GlassCard } from "@/components/glass/glass-card";
 import { glassTheme } from "@/lib/theme/glass";
@@ -7,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { BarChart3, TrendingUp, Users, BookOpen, Target } from "lucide-react";
 
 export default async function AdminAnalyticsPage() {
-  await requirePagePermission(ORG_PERMISSIONS.memberManage, { fresh: true, requireOrg: true });
+  await requirePagePermission("user:manage", { fresh: true });
 
   const stats = [
     { icon: Users, label: "Total Users", value: "342", change: "+12%", color: "emerald" },

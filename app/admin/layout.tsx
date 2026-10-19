@@ -7,11 +7,10 @@ import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";
 
 import { requirePagePermission } from "@/lib/auth/guards";
-import { ORG_PERMISSIONS } from "@/lib/auth/roles";
 import { Suspense } from "react";
 
 async function AdminGate({ children }: { children: React.ReactNode }) {
-    await requirePagePermission(ORG_PERMISSIONS.memberManage, { fresh: true });
+    await requirePagePermission("user:manage", { fresh: true });
     return <>{children}</>;
 }
 

@@ -5,7 +5,6 @@ import { connectToDatabase } from "@/lib/db";
 import { Submission } from "@/app/models/Submission";
 import { Assignment } from "@/app/models/Assignment";
 import { revalidatePath } from "next/cache";
-import { ORG_PERMISSIONS } from "@/lib/auth/roles";
 
 // Grade and Review a Student Submission
 export async function gradeSubmission(data: {
@@ -14,7 +13,7 @@ export async function gradeSubmission(data: {
   feedback: string;
   status: "graded" | "resubmit_required";
 }) {
-  const { orgId } = await requirePermission(ORG_PERMISSIONS.gradeWrite, { requireOrg: true });
+  await requirePermission("grade:write");
 
   if (!["graded", "resubmit_required"].includes(data.status)) {
     throw new Error("Invalid status");
@@ -22,12 +21,11 @@ export async function gradeSubmission(data: {
 
   await connectToDatabase();
 
-  const submission = await Submission.findOne({ _id: data.submissionId, orgId }).lean();
+  const submission = await Submission.findOne({ _id: data.submissionId }).lean();
   if (!submission) throw new AuthError("NOT_FOUND", 404);
 
   const assignment = await Assignment.findOne({
     _id: submission.assignmentId,
-    orgId,
   }).lean();
   if (!assignment) throw new AuthError("NOT_FOUND", 404);
 
@@ -47,6 +45,6 @@ export async function gradeSubmission(data: {
     throw new Error("Submission not found");
   }
 
-  revalidatePath("/dashboard/teacher/submissions");
+  revalidatePath("/student/assignments");
   return { success: true, submissionId: updated._id.toString() };
 }

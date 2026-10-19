@@ -4,12 +4,12 @@ import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";
 import { Suspense } from "react";
 import { auth } from "@clerk/nextjs/server";
-import { appRoleFromClerkRole, isClerkOrgRole } from "@/lib/auth/roles";
+import { isRole } from "@/lib/auth/roles";
 
 async function NavigationButtons() {
-  const { userId, orgRole } = await auth();
-  const normalizedRole = isClerkOrgRole(orgRole) ? orgRole : null;
-  const role = appRoleFromClerkRole(normalizedRole);
+  const { userId, sessionClaims } = await auth();
+  const metadata = (sessionClaims?.metadata ?? {}) as { role?: unknown; status?: unknown };
+  const role = isRole(metadata.role) ? metadata.role : null;
 
   // If signed in, show dashboard link
   if (userId && role) {

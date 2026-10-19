@@ -22,7 +22,7 @@ type StudentAssignment = {
 
 export const instant = false;
 
-async function StudentAssignmentsContent({ userId, orgId }: { userId: string; orgId: string }) {
+async function StudentAssignmentsContent({ userId }: { userId: string }) {
   let items: StudentAssignment[] = [];
 
   try {
@@ -30,7 +30,6 @@ async function StudentAssignmentsContent({ userId, orgId }: { userId: string; or
 
     const enrollments = await Enrollment.find({
       userId,
-      orgId,
       role: "student",
       status: "approved",
     })
@@ -41,11 +40,11 @@ async function StudentAssignmentsContent({ userId, orgId }: { userId: string; or
 
     if (courseIds.length > 0) {
       const [assignments, submissions] = await Promise.all([
-        Assignment.find({ orgId, courseId: { $in: courseIds } })
+        Assignment.find({ courseId: { $in: courseIds } })
           .populate("courseId", "levelOrGrade board")
           .sort({ dueDate: 1 })
           .lean(),
-        Submission.find({ orgId, studentId: userId }).lean(),
+        Submission.find({ studentId: userId }).lean(),
       ]);
 
       const byAssignment = new Map(
@@ -75,7 +74,7 @@ async function StudentAssignmentsContent({ userId, orgId }: { userId: string; or
 }
 
 export default async function StudentAssignmentsPage() {
-  const { userId, orgId } = await requirePageRole(["student"], { requireOrg: true });
+  const { userId } = await requirePageRole(["student"]);
 
   return (
     <div className="space-y-6">
@@ -93,7 +92,7 @@ export default async function StudentAssignmentsPage() {
           </GlassCard>
         }
       >
-        <StudentAssignmentsContent userId={userId} orgId={orgId!} />
+        <StudentAssignmentsContent userId={userId} />
       </Suspense>
     </div>
   );

@@ -8,7 +8,6 @@ export interface IAssignment extends Document {
   dueDate: Date;
   starterSnippetId?: mongoose.Types.ObjectId;
   createdBy: string; // Admin or Teacher userId
-  orgId: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,7 +21,6 @@ const AssignmentSchema = new Schema<IAssignment>(
     dueDate: { type: Date, required: true },
     starterSnippetId: { type: Schema.Types.ObjectId, ref: "Snippet" },
     createdBy: { type: String, required: true },
-    orgId: { type: String, required: true },
   },
   { timestamps: true }
 );

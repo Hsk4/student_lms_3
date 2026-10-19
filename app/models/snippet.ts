@@ -6,7 +6,6 @@ export interface ISnippet extends Document{
     language: string;
     tags: string[];
     userId: string;
-    orgId?: string; // Attached when created inside an Organization context
     createdAt: Date;
     updatedAt: Date;
 }

@@ -1,12 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import {
-  appRoleFromClerkRole,
-  canRoleAccessPermission,
-  homePathForRole,
-  isClerkOrgRole,
-  ORG_PERMISSIONS,
-} from "@/lib/auth/roles";
+import { homePathForRole, isRole, isUserStatus } from "@/lib/auth/roles";
 
 const isPublicRoute = createRouteMatcher([
   "/",
@@ -14,59 +8,78 @@ const isPublicRoute = createRouteMatcher([
   "/sign-up(.*)",
   "/api/webhooks(.*)",
 ]);
-const isOrgSelectRoute = createRouteMatcher(["/select-org(.*)"]);
-const isUnauthorizedRoute = createRouteMatcher(["/unauthorized(.*)", "/auth(.*)"]);
+const isUnauthorizedRoute = createRouteMatcher([
+  "/unauthorized(.*)",
+  "/rejected(.*)",
+]);
 const isApiRoute = createRouteMatcher(["/api(.*)", "/trpc(.*)"]);
 const isAdminArea = createRouteMatcher(["/admin(.*)"]);
 const isTeacherArea = createRouteMatcher(["/teacher(.*)"]);
 const isStudentArea = createRouteMatcher(["/student(.*)"]);
 
+function denyApi(message: string, status = 403) {
+  return NextResponse.json({ error: message }, { status });
+}
+
 export default clerkMiddleware(async (auth, req) => {
-  const { userId, orgId, orgRole, redirectToSignIn, sessionClaims } = await auth();
+  const { userId, redirectToSignIn, sessionClaims } = await auth();
+
   // 1. Unauthenticated
   if (!userId) {
     if (isPublicRoute(req)) return;
-    if (isApiRoute(req)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    if (isApiRoute(req)) return denyApi("Unauthorized", 401);
     return redirectToSignIn({ returnBackUrl: req.url });
   }
 
-  const status = (sessionClaims?.metadata as { status?: string })?.status;
-  if (status === "deactivated") {
-    return NextResponse.redirect(new URL("/?error=account_deactivated", req.url));
+  const metadata = (sessionClaims?.metadata ?? {}) as {
+    role?: unknown;
+    status?: unknown;
+  };
+  const role = isRole(metadata.role) ? metadata.role : null;
+  const status = isUserStatus(metadata.status) ? metadata.status : "pending";
+
+  const redirectTo = (path: string) =>
+    NextResponse.redirect(new URL(path, req.url));
+
+  // 2. Account status gates
+  if (status === "suspended") return redirectTo("/?error=account_suspended");
+  if (status === "rejected") {
+    if (isUnauthorizedRoute(req)) return;
+    return redirectTo("/rejected");
+  }
+  if (status !== "active") {
+    // Pending accounts may only use the public routes and /auth/pending.
+    if (isPublicRoute(req) || req.nextUrl.pathname.startsWith("/auth/pending"))
+      return;
+    if (isApiRoute(req)) return denyApi("Account is pending approval");
+    return redirectTo("/auth/pending");
   }
 
   if (isPublicRoute(req) || isUnauthorizedRoute(req)) return;
 
-  // 2. Every protected route requires an active organization.
-  if (!orgId && !isOrgSelectRoute(req)) {
-    if (isApiRoute(req)) {
-      return NextResponse.json({ error: "No active organization" }, { status: 403 });
+  // 3. Coarse area gates. Server code must still re-check every row.
+  if (isAdminArea(req)) {
+    if (role !== "admin") {
+      if (isApiRoute(req)) return denyApi("Forbidden");
+      return redirectTo(homePathForRole(role));
     }
-    return NextResponse.redirect(new URL("/select-org", req.url));
+    return;
   }
 
-  if (isOrgSelectRoute(req)) return;
-
-  const normalizedOrgRole = isClerkOrgRole(orgRole) ? orgRole : null;
-  const role = appRoleFromClerkRole(normalizedOrgRole);
-  if (!role) {
-    if (isApiRoute(req)) {
-      return NextResponse.json({ error: "Organization role not configured" }, { status: 403 });
+  if (isTeacherArea(req)) {
+    if (role !== "teacher") {
+      if (isApiRoute(req)) return denyApi("Forbidden");
+      return redirectTo(homePathForRole(role));
     }
-    return NextResponse.redirect(new URL("/unauthorized", req.url));
+    return;
   }
 
-  // 3. Coarse permission gates by area. Server actions must still re-check.
-  if (isAdminArea(req) && !canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.memberManage)) {
-    return NextResponse.redirect(new URL("/unauthorized", req.url));
-  }
-  if (isTeacherArea(req) && !canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseManage)) {
-    return NextResponse.redirect(new URL("/unauthorized", req.url));
-  }
-  if (isStudentArea(req) && !canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseView)) {
-    return NextResponse.redirect(new URL(homePathForRole(role), req.url));
+  if (isStudentArea(req)) {
+    if (role !== "student") {
+      if (isApiRoute(req)) return denyApi("Forbidden");
+      return redirectTo(homePathForRole(role));
+    }
+    return;
   }
 });
 

@@ -5,10 +5,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { auth } from "@clerk/nextjs/server";
 import { Suspense } from "react";
 import {
-  appRoleFromClerkRole,
   canRoleAccessPermission,
-  isClerkOrgRole,
-  ORG_PERMISSIONS,
+  isRole,
 } from "@/lib/auth/roles";
 import { glassTheme } from "@/lib/theme/glass";
 import { cn } from "@/lib/utils";
@@ -30,18 +28,19 @@ export const metadata: Metadata = {
 };
 
 async function HeaderContent() {
-  const { userId, orgId, orgRole } = await auth();
-  const normalizedOrgRole = isClerkOrgRole(orgRole) ? orgRole : null;
-  const role = appRoleFromClerkRole(normalizedOrgRole);
-  const canManageMembers = canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.memberManage);
-  const canManageCourses = canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseManage);
-  const canViewCourses = canRoleAccessPermission(normalizedOrgRole, ORG_PERMISSIONS.courseView);
+  const { userId, sessionClaims } = await auth();
+  const metadata = (sessionClaims?.metadata ?? {}) as { role?: unknown; status?: unknown };
+  const role = isRole(metadata.role) ? metadata.role : null;
+  const status = typeof metadata.status === "string" ? metadata.status : null;
+  const canManageMembers = canRoleAccessPermission(role, "user:manage");
+  const canManageCourses = canRoleAccessPermission(role, "course:manage");
+  const canViewCourses = canRoleAccessPermission(role, "course:view");
 
   return (
     <ClerkComponents
       userId={userId ?? null}
-      orgId={orgId ?? null}
       role={role ?? null}
+      status={status}
       canManageMembers={canManageMembers}
       canManageCourses={canManageCourses}
       canViewCourses={canViewCourses}

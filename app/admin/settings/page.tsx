@@ -1,5 +1,4 @@
 import { requirePagePermission } from "@/lib/auth/guards";
-import { ORG_PERMISSIONS } from "@/lib/auth/roles";
 import { GlassPageHeader } from "@/components/glass/glass-page-header";
 import { GlassCard } from "@/components/glass/glass-card";
 import { glassTheme } from "@/lib/theme/glass";
@@ -7,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Settings, Bell, Lock, Users, FileText, Database } from "lucide-react";
 
 export default async function AdminSettingsPage() {
-  await requirePagePermission(ORG_PERMISSIONS.memberManage, { fresh: true, requireOrg: true });
+  await requirePagePermission("user:manage", { fresh: true });
 
   return (
     <div className="space-y-6">

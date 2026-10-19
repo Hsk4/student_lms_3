@@ -8,7 +8,7 @@ import { BookOpen, FileCheck2, Calendar } from "lucide-react";
 export const instant = false;
 
 export default async function StudentDashboardPage() {
-  await requirePageRole(["student"], { requireOrg: true });
+  await requirePageRole(["student"]);
 
   return (
     <div className="space-y-6">

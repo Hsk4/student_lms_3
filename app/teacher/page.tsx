@@ -12,13 +12,13 @@ import { Enrollment } from "@/app/models/Enrollment";
 export const instant = false;
 
 export default async function TeacherPage() {
-  const { role, userId, orgId } = await requirePageRole(["teacher", "admin"], { requireOrg: true });
+  const { role, userId } = await requirePageRole(["teacher", "admin"]);
 
   if (role === "admin") {
     return (
       <div className="space-y-6">
-        <GlassPageHeader 
-          title="Teacher Dashboard" 
+        <GlassPageHeader
+          title="Teacher Dashboard"
           subtitle="Restricted Area"
           description="Admin users should access the Admin Panel instead."
           icon={<BookOpen className="w-6 h-6 text-teal-400" />}
@@ -40,13 +40,12 @@ export default async function TeacherPage() {
   let courses = [];
   let studentCount = 0;
   let pendingReviews = 0;
-  
+
   try {
     await connectToDatabase();
-    
+
     const enrollments = await Enrollment.find({
       userId,
-      orgId,
       role: "teacher",
       status: "approved",
     }).populate("courseId").lean();

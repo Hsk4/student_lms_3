@@ -143,21 +143,21 @@ Webhook (`/api/webhooks/clerk`, verified with Clerk's signing secret): `user.cre
 
 Each phase ends with a passing build and a manual check. Update the checkboxes as you go.
 
-### Phase 0, Safety net and dead-code removal
-- [ ] Create branch `refactor/single-school`; confirm `bun run build` state first (note any existing failures)
-- [ ] Delete the Phase 0 list above, then grep for broken imports
-- [ ] Add `.env.example` (`MONGODB_URI`, Clerk keys, webhook secret, no `SCHOOL_ORG_ID`)
-- [ ] Remove `/dashboard` from navigation and links
-- **Done when:** build passes and no file in the repo imports `@/data/mock-data`
+### Phase 0, Safety net and dead-code removal — DONE
+- [x] Create branch `refactor/single-school`; confirm `bun run build` state first (note any existing failures)
+- [x] Delete the Phase 0 list above, then grep for broken imports
+- [x] Add `.env.example` (`MONGODB_URI`, Clerk keys, webhook secret, no `SCHOOL_ORG_ID`)
+- [x] Remove `/dashboard` from navigation and links
+- **Done when:** build passes and no file in the repo imports `@/data/mock-data` — **DONE**
 
-### Phase 1, Remove Clerk Organizations
-- [ ] Rewrite `lib/auth/roles.ts` (plain roles and permissions, no `org:` strings)
-- [ ] Rewrite `lib/auth/guards.ts` (no org helpers; read role/status from session claims, `fresh` option reads Clerk user metadata)
-- [ ] Rewrite `proxy.ts` per section 5 (temporary: only `admin|teacher|student` until Phase 2)
-- [ ] Remove `orgId` from models, actions, pages, `lib/admin-dashboard.ts`
-- [ ] Migrate existing users: copy their org role into `publicMetadata.role`
-- [ ] Turn Organizations off in the Clerk dashboard; remove `SCHOOL_ORG_ID`
-- **Done when:** a signed-in user reaches their dashboard with no org selection, and `grep -rn orgId` returns nothing
+### Phase 1, Remove Clerk Organizations — DONE
+- [x] Rewrite `lib/auth/roles.ts` (plain roles and permissions, no `org:` strings)
+- [x] Rewrite `lib/auth/guards.ts` (no org helpers; read role/status from session claims, `fresh` option reads Clerk user metadata)
+- [x] Rewrite `proxy.ts` per section 5 (temporary: only `admin|teacher|student` until Phase 2)
+- [x] Remove `orgId` from models, actions, pages, `lib/admin-dashboard.ts`
+- [x] Migrate existing users: copy their org role into `publicMetadata.role` — `scripts/migrate-org-roles.ts`
+- [x] Turn Organizations off in the Clerk dashboard; remove `SCHOOL_ORG_ID`
+- **Done when:** a signed-in user reaches their dashboard with no org selection, and `grep -rn orgId` returns nothing — **DONE** (only `docs/` prose mentions it; `app/select-org` deleted)
 
 ### Phase 2, Roles, status and the User mirror
 - [ ] Add `super_admin` and `parent` to roles, permissions and proxy

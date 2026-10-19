@@ -21,7 +21,7 @@ export type ActivityKind =
   | "assignment";
 
 export interface DashboardData {
-  /** False when the admin has no active Clerk organization. */
+  /** Always true for a single school; kept for client compatibility. */
   hasOrg: boolean;
   /** True when a data source failed and some numbers are missing. */
   degraded: boolean;
@@ -180,28 +180,20 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
   // (required by Cache Components).
   await connection();
 
-  const { orgId } = await requirePageRole(["admin"]);
-  if (!orgId) return emptyData({ hasOrg: false });
+  await requirePageRole(["admin"]);
 
   const now = Date.now();
   const keys14 = dayKeys(14, now);
   const keys56 = dayKeys(56, now);
-  const weekAgo = new Date(now - 7 * DAY);
 
   const data = emptyData();
 
-  /* ---- Clerk: org name + member count (independent of Mongo) ------------ */
+  /* ---- Clerk: school name + member count (independent of Mongo) --------- */
   const clerkPart = (async () => {
     try {
       const client = await clerkClient();
-      const [org, memberships] = await Promise.all([
-        client.organizations.getOrganization({ organizationId: orgId }),
-        client.organizations.getOrganizationMembershipList({
-          organizationId: orgId,
-          limit: 1,
-        }),
-      ]);
-      data.orgName = org.name;
+      const memberships = await client.users.getUserList({ limit: 1 });
+      data.orgName = "Fastly School";
       data.people.members = memberships.totalCount;
     } catch (err) {
       console.error("[admin-dashboard] Clerk lookup failed", err);
@@ -209,13 +201,13 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
     }
   })();
 
-  /* ---- Mongo: everything else, scoped to this organization -------------- */
+  /* ---- Mongo: everything else -------------------------------------------- */
   const mongoPart = (async () => {
     try {
       await connectToDatabase();
 
       const [courses] = await Promise.all([
-        Course.find({ orgId })
+        Course.find({})
           .select("board levelOrGrade subjects createdAt")
           .sort({ createdAt: -1 })
           .lean(),
@@ -270,7 +262,7 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
           "createdAt",
           keys56,
         ),
-        dailyCounts(Course, { orgId }, "createdAt", keys56),
+        dailyCounts(Course, {}, "createdAt", keys56),
       ]);
 
       /* Stat cards */

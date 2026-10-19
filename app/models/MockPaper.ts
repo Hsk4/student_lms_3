@@ -9,7 +9,6 @@ export interface IMockPaper extends Document {
   fileUrl?: string; // Link to PDF or document storage
   solutionsUrl?: string;
   createdBy: string;
-  orgId: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,7 +23,6 @@ const MockPaperSchema = new Schema<IMockPaper>(
     fileUrl: { type: String },
     solutionsUrl: { type: String },
     createdBy: { type: String, required: true },
-    orgId: { type: String, required: true },
   },
   { timestamps: true }
 );

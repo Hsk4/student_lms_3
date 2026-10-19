@@ -12,8 +12,7 @@ export interface ICourse extends Document {
     board: BoardType;
     levelOrGrade: string; // e.g., "1st year (Only Commerce)", "9th", "Advance Accounting"
     subjects: string[];   // e.g., ["Accounting", "Maths", "Economics", "Business Studies"]
-    createdBy: string;    // Clerk org admin/teacher userId who owns the course
-    orgId: string;        // Clerk Organization ID
+    createdBy: string;    // Clerk userId who owns the course
     createdAt: Date;
     updatedAt: Date;
 }
@@ -28,7 +27,6 @@ const CourseSchema = new Schema<ICourse>(
         levelOrGrade: { type: String, required: true },
         subjects: [{ type: String, required: true }],
         createdBy: { type: String, required: true },
-        orgId: { type: String, required: true },
     },
     { timestamps: true }
 );

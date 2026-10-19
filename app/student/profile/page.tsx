@@ -7,7 +7,7 @@ import { User } from "lucide-react";
 export const instant = false;
 
 export default async function StudentProfilePage() {
-  await requirePageRole(["student"], { requireOrg: true });
+  await requirePageRole(["student"]);
 
   return (
     <div className="space-y-6">

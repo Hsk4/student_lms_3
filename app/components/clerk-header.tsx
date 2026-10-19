@@ -1,21 +1,21 @@
 "use client";
 
-import { UserButton, OrganizationSwitcher } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { glassTheme } from "@/lib/theme/glass";
 
 export function ClerkComponents({
   userId,
-  orgId,
   role,
+  status,
   canManageMembers,
   canManageCourses,
   canViewCourses,
 }: {
   userId: string | null;
-  orgId: string | null;
   role: string | null;
+  status: string | null;
   canManageMembers: boolean;
   canManageCourses: boolean;
   canViewCourses: boolean;
@@ -26,18 +26,12 @@ export function ClerkComponents({
         <Link href="/">
           <h1 className={cn("font-bold text-lg", glassTheme.text.primary)}>Student LMS</h1>
         </Link>
-        {userId && (
-          <OrganizationSwitcher
-            hidePersonal
-            afterSelectOrganizationUrl={role ? `/${role}` : "/select-org"}
-          />
-        )}
-        {userId && !orgId && (
-          <Link href="/select-org" className="text-sm font-medium text-amber-400">
-            Select school
+        {userId && status === "pending" && (
+          <Link href="/auth/pending" className="text-sm font-medium text-amber-400">
+            Pending approval
           </Link>
         )}
-        {userId && orgId && role && (
+        {userId && status === "active" && role && (
           <nav className="flex gap-4 ml-4">
             {canManageMembers && (
               <Link href="/admin" className={cn("text-sm font-medium hover:text-emerald-400 transition-colors", glassTheme.text.secondary)}>

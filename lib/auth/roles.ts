@@ -2,98 +2,61 @@
 
 export const ROLES = ["admin", "teacher", "student"] as const;
 export type Role = (typeof ROLES)[number];
-export const SELF_ASSIGNABLE_ROLES = ["teacher", "student"] as const;
-export type SelfAssignableRole = (typeof SELF_ASSIGNABLE_ROLES)[number];
 
-export const CLERK_ORG_ROLES = ["org:admin", "org:teacher", "org:student"] as const;
-export type ClerkOrgRole = (typeof CLERK_ORG_ROLES)[number];
+export const USER_STATUSES = ["pending", "active", "rejected", "suspended"] as const;
+export type UserStatus = (typeof USER_STATUSES)[number];
 
-export const ORG_PERMISSIONS = {
-    courseCreate: "org:course:create",
-    courseManage: "org:course:manage",
-    courseView: "org:course:view",
-    gradeWrite: "org:grade:write",
-    memberManage: "org:member:manage",
-    billingManage: "org:billing:manage",
+export const PERMISSIONS = {
+    userManage: "user:manage",
+    courseCreate: "course:create",
+    courseManage: "course:manage",
+    courseView: "course:view",
+    gradeWrite: "grade:write",
+    billingManage: "billing:manage",
 } as const;
 
-export type OrgPermission = (typeof ORG_PERMISSIONS)[keyof typeof ORG_PERMISSIONS];
+export type Permission = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
-const ROLE_TO_CLERK_ROLE: Record<Role, ClerkOrgRole> = {
-    admin: "org:admin",
-    teacher: "org:teacher",
-    student: "org:student",
-};
-
-const CLERK_ROLE_TO_ROLE: Record<ClerkOrgRole, Role> = {
-    "org:admin": "admin",
-    "org:teacher": "teacher",
-    "org:student": "student",
-};
-
-const PERMISSIONS_BY_ROLE: Record<Role, readonly OrgPermission[]> = {
+const PERMISSIONS_BY_ROLE: Record<Role, readonly Permission[]> = {
     admin: [
-        ORG_PERMISSIONS.courseCreate,
-        ORG_PERMISSIONS.courseManage,
-        ORG_PERMISSIONS.courseView,
-        ORG_PERMISSIONS.gradeWrite,
-        ORG_PERMISSIONS.memberManage,
-        ORG_PERMISSIONS.billingManage,
+        PERMISSIONS.userManage,
+        PERMISSIONS.courseCreate,
+        PERMISSIONS.courseManage,
+        PERMISSIONS.courseView,
+        PERMISSIONS.gradeWrite,
+        PERMISSIONS.billingManage,
     ],
     teacher: [
-        ORG_PERMISSIONS.courseCreate,
-        ORG_PERMISSIONS.courseManage,
-        ORG_PERMISSIONS.courseView,
-        ORG_PERMISSIONS.gradeWrite,
+        PERMISSIONS.courseCreate,
+        PERMISSIONS.courseManage,
+        PERMISSIONS.courseView,
+        PERMISSIONS.gradeWrite,
     ],
-    student: [ORG_PERMISSIONS.courseView],
+    student: [PERMISSIONS.courseView],
 };
 
 export function isRole(value: unknown): value is Role {
     return typeof value === "string" && (ROLES as readonly string[]).includes(value);
 }
 
-export function isSelfAssignableRole(value: unknown): value is SelfAssignableRole {
-    return typeof value === "string" && (SELF_ASSIGNABLE_ROLES as readonly string[]).includes(value);
+export function isUserStatus(value: unknown): value is UserStatus {
+    return typeof value === "string" && (USER_STATUSES as readonly string[]).includes(value);
 }
 
-export function isClerkOrgRole(value: unknown): value is ClerkOrgRole {
-    return typeof value === "string" && (CLERK_ORG_ROLES as readonly string[]).includes(value);
-}
-
-export function toClerkOrgRole(role: Role): ClerkOrgRole {
-    return ROLE_TO_CLERK_ROLE[role];
-}
-
-export function appRoleFromClerkRole(role: unknown): Role | null {
-    if (!isClerkOrgRole(role)) return null;
-    return CLERK_ROLE_TO_ROLE[role];
-}
-
-export function permissionsForRole(role: Role | null | undefined): readonly OrgPermission[] {
+export function permissionsForRole(role: Role | null | undefined): readonly Permission[] {
     return role ? PERMISSIONS_BY_ROLE[role] : [];
 }
 
 export function canRoleAccessPermission(
-    role: ClerkOrgRole | Role | null | undefined,
-    permission: OrgPermission,
+    role: Role | null | undefined,
+    permission: Permission,
 ): boolean {
-    const appRole = isRole(role) ? role : appRoleFromClerkRole(role);
-    if (!appRole) return false;
-    return permissionsForRole(appRole).includes(permission);
+    if (!role) return false;
+    return permissionsForRole(role).includes(permission);
 }
 
-export function roleMatches(
-    currentRole: ClerkOrgRole | Role | null | undefined,
-    expectedRole: ClerkOrgRole | Role,
-): boolean {
-    const normalizedCurrent = isRole(currentRole)
-        ? toClerkOrgRole(currentRole)
-        : currentRole;
-    const normalizedExpected = isRole(expectedRole)
-        ? toClerkOrgRole(expectedRole)
-        : expectedRole;
-    return normalizedCurrent === normalizedExpected;
+export function roleMatches(currentRole: Role | null | undefined, expectedRole: Role): boolean {
+    return currentRole === expectedRole;
 }
 
 export function homePathForRole(role?: Role | null): string {
@@ -105,6 +68,6 @@ export function homePathForRole(role?: Role | null): string {
         case "student":
             return "/student";
         default:
-            return "/select-org";
+            return "/auth/pending";
     }
 }
