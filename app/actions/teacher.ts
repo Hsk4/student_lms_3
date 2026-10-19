@@ -1,44 +1,67 @@
 "use server";
 
-import { AuthError, requireCourseAccess, requirePermission } from "@/lib/auth/guards";
+import { AuthError, requirePermission } from "@/lib/auth/guards";
 import { connectToDatabase } from "@/lib/db";
 import { Submission } from "@/app/models/Submission";
 import { Assignment } from "@/app/models/Assignment";
+import { Enrollment } from "@/app/models/Enrollment";
 import { revalidatePath } from "next/cache";
 
-// Grade and Review a Student Submission
+/**
+ * Grade and review a student submission.
+ * Numeric scores only (0–100), capped at the assignment's maxScore. The
+ * caller must teach a course the student is enrolled in; admins may grade any.
+ */
 export async function gradeSubmission(data: {
   submissionId: string;
-  grade: string;
-  feedback: string;
+  score: number;
+  feedback?: string;
   status: "graded" | "resubmit_required";
 }) {
-  await requirePermission("grade:write");
+  const { userId, role } = await requirePermission("grade:write");
 
   if (!["graded", "resubmit_required"].includes(data.status)) {
     throw new Error("Invalid status");
   }
+  if (!Number.isFinite(data.score) || data.score < 0 || data.score > 100) {
+    throw new Error("Score must be between 0 and 100");
+  }
 
   await connectToDatabase();
 
-  const submission = await Submission.findOne({ _id: data.submissionId }).lean();
+  const submission = await Submission.findById(data.submissionId).lean();
   if (!submission) throw new AuthError("NOT_FOUND", 404);
 
-  const assignment = await Assignment.findOne({
-    _id: submission.assignmentId,
-  }).lean();
+  const assignment = await Assignment.findById(submission.assignmentId).lean();
   if (!assignment) throw new AuthError("NOT_FOUND", 404);
 
-  await requireCourseAccess(assignment.courseId.toString(), "manage");
+  if (role !== "admin" && role !== "super_admin") {
+    const teaches = await Enrollment.exists({
+      userId,
+      courseId: assignment.courseId,
+      role: "teacher",
+      status: "approved",
+    });
+    if (!teaches) throw new AuthError("FORBIDDEN", 403);
+  }
 
+  const maxScore = assignment.maxScore ?? 100;
+  if (data.score > maxScore) {
+    throw new Error(`Score cannot exceed ${maxScore}`);
+  }
+
+  const gradedAt = new Date();
   const updated = await Submission.findByIdAndUpdate(
     data.submissionId,
     {
-      grade: data.grade,
-      feedback: data.feedback,
+      score: data.status === "graded" ? data.score : undefined,
+      maxScore,
+      feedback: data.feedback?.trim() || undefined,
       status: data.status,
+      gradedBy: userId,
+      gradedAt,
     },
-    { new: true }
+    { new: true },
   );
 
   if (!updated) {
@@ -46,5 +69,7 @@ export async function gradeSubmission(data: {
   }
 
   revalidatePath("/student/assignments");
+  revalidatePath("/student");
+  revalidatePath("/teacher");
   return { success: true, submissionId: updated._id.toString() };
 }

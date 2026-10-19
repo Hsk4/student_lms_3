@@ -3,7 +3,6 @@
 import { connectToDatabase } from "@/lib/db";
 import { Enrollment } from "@/app/models/Enrollment";
 import { Assignment } from "@/app/models/Assignment";
-import { MockPaper } from "@/app/models/MockPaper";
 import { Course } from "@/app/models/course";
 import { AuditLog } from "@/app/models/AuditLog";
 import { User } from "@/app/models/User";
@@ -324,10 +323,10 @@ export async function assignUserToCourse(data: {
 export async function createAssignment(data: {
   title: string;
   description: string;
+  instructions?: string;
   courseId: string;
-  subject: string;
   dueDate: Date;
-  starterSnippetId?: string;
+  maxScore?: number;
 }): Promise<ActionResult<string>> {
   try {
     const { userId } = await requireRole(["admin", "super_admin", "teacher"], { fresh: true });
@@ -335,8 +334,17 @@ export async function createAssignment(data: {
     await connectToDatabase();
     await requireCourseAccess(data.courseId, "manage");
 
+    if (!data.title?.trim() || !data.description?.trim() || !data.dueDate) {
+      throw new AuthError("Title, description and due date are required", 403);
+    }
+
     const assignment = await Assignment.create({
-      ...data,
+      title: data.title.trim(),
+      description: data.description.trim(),
+      instructions: data.instructions?.trim() || undefined,
+      courseId: data.courseId,
+      dueDate: data.dueDate,
+      maxScore: data.maxScore && data.maxScore > 0 ? data.maxScore : 100,
       createdBy: userId,
     });
 
@@ -349,32 +357,7 @@ export async function createAssignment(data: {
   }
 }
 
-// 3. Publish Mock Paper (Admin Only)
-export async function createMockPaper(data: {
-  title: string;
-  board: string;
-  levelOrGrade: string;
-  subject: string;
-  year?: number;
-  fileUrl?: string;
-  solutionsUrl?: string;
-}): Promise<ActionResult<string>> {
-  try {
-    const { userId } = await requirePermission("course:manage", { fresh: true });
-
-    await connectToDatabase();
-    const mock = await MockPaper.create({
-      ...data,
-      createdBy: userId,
-    });
-
-    return { success: true, data: mock._id.toString() };
-  } catch (error) {
-    const message = toMessage(error, "Failed to create mock paper");
-    console.error("createMockPaper error:", message);
-    return { success: false, error: message };
-  }
-}
+// 3. Mock/past papers now live in app/actions/catalog.ts as a Material kind.
 
 /* -------------------------------------------------------------------------- */
 /*  Backwards-compatible exports for the accounts panel                        */

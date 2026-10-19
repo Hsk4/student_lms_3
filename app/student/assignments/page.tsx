@@ -19,7 +19,6 @@ type StudentAssignment = {
   score: string | null;
   feedback: string | null;
 };
-
 export const instant = false;
 
 async function StudentAssignmentsContent({ userId }: { userId: string }) {
@@ -41,7 +40,14 @@ async function StudentAssignmentsContent({ userId }: { userId: string }) {
     if (courseIds.length > 0) {
       const [assignments, submissions] = await Promise.all([
         Assignment.find({ courseId: { $in: courseIds } })
-          .populate("courseId", "levelOrGrade board")
+          .populate({
+            path: "courseId",
+            select: "subjectId levelId",
+            populate: [
+              { path: "subjectId", select: "name" },
+              { path: "levelId", select: "name" },
+            ],
+          })
           .sort({ dueDate: 1 })
           .lean(),
         Submission.find({ studentId: userId }).lean(),
@@ -53,15 +59,23 @@ async function StudentAssignmentsContent({ userId }: { userId: string }) {
 
       items = assignments.map((a) => {
         const sub = byAssignment.get(String(a._id));
-        const course = a.courseId as unknown as { levelOrGrade?: string; board?: string } | null;
+        const course = a.courseId as unknown as {
+          subjectId?: { name?: string };
+          levelId?: { name?: string };
+        } | null;
         const status = !sub ? "pending" : sub.status === "graded" ? "graded" : "submitted";
         return {
           id: String(a._id),
           title: a.title,
-          course: course?.levelOrGrade ?? "Course",
+          course: [course?.subjectId?.name, course?.levelId?.name]
+            .filter(Boolean)
+            .join(" · ") || "Course",
           dueDate: a.dueDate.toISOString(),
           status,
-          score: sub?.grade ?? null,
+          score:
+            sub?.score !== undefined && sub?.score !== null
+              ? `${sub.score}/${sub.maxScore ?? a.maxScore ?? 100}`
+              : null,
           feedback: sub?.feedback ?? null,
         };
       });

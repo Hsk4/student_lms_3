@@ -48,7 +48,12 @@ export default async function TeacherPage() {
       userId,
       role: "teacher",
       status: "approved",
-    }).populate("courseId").lean();
+    })
+      .populate({
+        path: "courseId",
+        populate: [{ path: "boardId" }, { path: "levelId" }, { path: "subjectId" }],
+      })
+      .lean();
 
     courses = enrollments.map((e: any) => e.courseId).filter(Boolean);
 
@@ -75,8 +80,8 @@ export default async function TeacherPage() {
 
   return (
     <div className="space-y-6">
-      <GlassPageHeader 
-        title="Teacher Dashboard" 
+      <GlassPageHeader
+        title="Teacher Dashboard"
         subtitle="Classroom Management"
         description="Manage your courses, assignments, and student progress."
         icon={<BookOpen className="w-6 h-6 text-teal-400" />}
@@ -96,7 +101,7 @@ export default async function TeacherPage() {
             <BookOpen className="w-5 h-5 text-teal-400" />
             My Courses
           </h3>
-          
+
           {courses.length === 0 ? (
             <div className="text-center py-8">
               <p className={glassTheme.text.secondary}>No courses assigned yet</p>
@@ -106,14 +111,13 @@ export default async function TeacherPage() {
               {courses.map((course: any) => (
                 <div key={course._id} className={cn("p-4 rounded-lg border transition-all", glassTheme.bg.teal, glassTheme.hover.teal)}>
                   <div className="flex items-center justify-between mb-2">
-                    <p className={glassTheme.text.primary}>{course.levelOrGrade} - {course.board}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {course.subjects?.map((subject: string) => (
-                      <span key={subject} className={cn("text-xs px-2 py-1 rounded-lg", "bg-teal-500/20 border border-teal-400/20 text-teal-300")}>
-                        {subject}
-                      </span>
-                    ))}
+                    <p className={glassTheme.text.primary}>
+                      {course.subjectId?.name ?? "Course"} — {course.levelId?.name ?? "—"}
+                    </p>
+                    <span className={cn("text-xs", glassTheme.text.muted)}>
+                      {course.boardId?.name ?? ""}
+                      {course.medium ? ` · ${course.medium}` : ""}
+                    </span>
                   </div>
                 </div>
               ))}

@@ -208,7 +208,10 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
 
       const [courses] = await Promise.all([
         Course.find({})
-          .select("board levelOrGrade subjects createdAt")
+          .select("boardId levelId subjectId medium isActive createdAt")
+          .populate("boardId", "name")
+          .populate("levelId", "name order")
+          .populate("subjectId", "name")
           .sort({ createdAt: -1 })
           .lean(),
       ]);
@@ -216,11 +219,17 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
       const courseIds = courses.map((c) => c._id);
       const inCourses = { courseId: { $in: courseIds } };
 
+      const courseLabel = (c: (typeof courses)[number]) =>
+        [
+          (c.boardId as unknown as { name?: string } | null)?.name,
+          (c.levelId as unknown as { name?: string } | null)?.name,
+          (c.subjectId as unknown as { name?: string } | null)?.name,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
       const courseTitle = new Map(
-        courses.map((c) => [
-          c._id.toString(),
-          `${c.levelOrGrade} · ${c.board}`,
-        ]),
+        courses.map((c) => [c._id.toString(), courseLabel(c)]),
       );
 
       const [
@@ -312,10 +321,11 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
 
       const boardMap = new Map<string, { courses: number; students: number }>();
       for (const c of courses) {
-        const b = boardMap.get(c.board) ?? { courses: 0, students: 0 };
+        const board = (c.boardId as unknown as { name?: string } | null)?.name ?? "Unassigned";
+        const b = boardMap.get(board) ?? { courses: 0, students: 0 };
         b.courses += 1;
         b.students += roles.get(c._id.toString())?.students ?? 0;
-        boardMap.set(c.board, b);
+        boardMap.set(board, b);
       }
       data.boards = [...boardMap.entries()]
         .map(([board, v]) => ({ board, ...v }))
@@ -326,8 +336,8 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
           const r = roles.get(c._id.toString());
           return {
             id: c._id.toString(),
-            title: c.levelOrGrade,
-            board: c.board,
+            title: courseLabel(c),
+            board: (c.boardId as unknown as { name?: string } | null)?.name ?? "Unassigned",
             students: r?.students ?? 0,
             teachers: r?.teachers ?? 0,
           };
@@ -341,7 +351,7 @@ export async function getAdminDashboardData(): Promise<DashboardData> {
           id: `crs-${c._id}`,
           kind: "course" as const,
           title: "Course created",
-          detail: `${c.levelOrGrade} · ${c.board}`,
+          detail: courseLabel(c),
           at: c.createdAt.getTime(),
           ago: ago(c.createdAt, now),
         })),

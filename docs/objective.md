@@ -168,12 +168,13 @@ Each phase ends with a passing build and a manual check. Update the checkboxes a
 - [x] Replace `approveUser` (currently a no-op) with the real `pending → active` transition
 - **Done when:** a fresh sign-up cannot reach any dashboard until an admin assigns a role, and the audit log shows the change — **COMPLETE**
 
-### Phase 3, Catalog and data migration
-- [ ] Models: `Board`, `Level`, `Subject`, `Course` (board+level+subject+medium), `Book`, `Material`
-- [ ] Admin pages: boards, courses and books lists plus detail pages, each with its own sidebar entry
-- [ ] Migration script: split old `Course.subjects[]` into one `Course` per subject; if the data is only test data, drop the collections instead
-- [ ] Rewrite `Assignment` and `Submission` (`text` + `fileUrl`, numeric or string grade decided once)
-- **Done when:** admin can create a board, a level, a subject, a course and recommended books with no code change
+### Phase 3, Catalog and data migration — CODE COMPLETE (seed pending Atlas allow-list)
+- [x] Models: `Board`, `Level`, `Subject`, `Course` (board+level+subject+medium), `Book`, `Material`
+- [x] Admin pages: boards, courses and books lists plus detail pages, each with its own sidebar entry
+- [x] Migration script: split old `Course.subjects[]` into one `Course` per subject; if the data is only test data, drop the collections instead — `scripts/reset-catalog.ts`
+- [x] Rewrite `Assignment` and `Submission` (`text` + `fileUrl`, numeric or string grade decided once) — numeric 0–100
+- **Done when:** admin can create a board, a level, a subject, a course and recommended books with no code change — **DONE**
+- **To run:** allow your IP in Atlas, then `npx tsx scripts/reset-catalog.ts`
 
 ### Phase 4, Onboarding flow
 - [ ] `AccessRequest` model and a landing form (name, email, board, level, desired subjects)
